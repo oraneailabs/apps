@@ -193,6 +193,7 @@ button.adv[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
 .plist button.on{border-color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,var(--panel2))}
 .pcard{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:4px;background:var(--panel2);padding:12px 14px}
 .pcard h3{font-size:18px}.pcard .role{margin:4px 0 8px;font-weight:500}.pcard p{margin:6px 0;color:var(--muted)}
+.pcard .watch{color:var(--fg);border-left:2px solid var(--info);padding-left:10px}
 .pcard .lv{margin-top:10px;font:12.5px var(--mono);color:var(--live);border-top:1px dashed var(--line);padding-top:8px}
 /* ---- layout language: Controls (operate the machine) and Settings (properties of the simulator) ---- */
 .zones{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:10px}
@@ -389,7 +390,7 @@ button.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);
         <div class="pane" data-pane="parts" hidden>
           
           <div class="plist" id="plist"></div>
-          <div class="pcard"><h3 id="pname"></h3><p class="role" id="prole"></p><p id="phow"></p><div class="seg"><button id="plink" hidden></button></div><div class="lv" id="plive"></div></div>
+          <div class="pcard"><h3 id="pname"></h3><p class="role" id="prole"></p><p id="phow"></p><div class="seg"><button id="plink" hidden></button></div><p class="watch" id="pwatch"></p><div class="lv" id="plive"></div></div>
         </div>
         <div class="pane" data-pane="log" hidden><div id="log"></div></div>
         <div class="pane" data-pane="guide" hidden>
@@ -590,7 +591,7 @@ function build() {
     // invisible hit area so a whole rung responds to hover or tap
     const hit = mk('rect', { x: RL, y: y + 4, width: RR - RL, height: 38 + nb * 30, fill: 'transparent', stroke: 'none' }, r.g);
     r.g.insertBefore(hit, r.g.firstChild);
-    r.g.addEventListener('pointerover', () => { $('#rnote').innerHTML = `<b>RUNG ${String(r.n).padStart(2, '0')}</b> ${r.note || ''}`; });
+    r.g.addEventListener('pointerover', () => { const lab = typeof r.coil.label === 'function' ? 'T1' : r.coil.label, hit = hoverRung(lab); $('#rnote').innerHTML = `<b>RUNG ${String(r.n).padStart(2, '0')}</b> ${r.note || ''}` + (hit ? ' <i>Its part is outlined in the 3D view.</i>' : ''); });
     y += 42 + nb * 30;
   }
   const h = y + 6;
@@ -674,15 +675,15 @@ function PS(t, cx, cy, fn, vertical, label, lx, ly) {
     return [g, f];
   });
   TX(8, 548, 'Chain open → K_RUN drops → both contactors drop → brake sets.');
-  let a1 = 0, a2 = 0;
+  const mots = pwr.querySelectorAll('.mot');
   pw.push(() => {
-    m1.classList.toggle('on', anyOn()); a1 += X.v * X.dt * 0; // angle follows position for exact sync
+    m1.classList.toggle('on', anyOn());
     rot1.setAttribute('transform', `translate(274,375) rotate(${(X.pos / R) * 57.3 * 0.5})`);
     rot2.setAttribute('transform', `translate(565,235) rotate(${X.door * 720})`);
     rpm.textContent = Math.round(Math.abs(X.v) / (2 * Math.PI * R) * 60) + ' rpm' + (X.K_UP ? ' ▲' : X.K_DN ? ' ▼' : '');
     dst.textContent = dopI() ? '▶ OPENING' : dclI() ? '◀ CLOSING' : X.K_DOP && X.LS_DO ? 'LS2 CUT OFF' : 'STOPPED';
     y1.classList.toggle('on', X.K_BRK);
-    pwr.querySelectorAll('.mot').forEach((e, i) => { if (i === 1) e.classList.toggle('on', dopI() || dclI()); });
+    if (mots[1]) mots[1].classList.toggle('on', dopI() || dclI());
     nodes.forEach(([g, f]) => { const ok = f(); g.classList.toggle('ok', ok); g.classList.toggle('bad', !ok); });
   });
 })();
@@ -731,23 +732,35 @@ function explain() {
 const canvas = $('#view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const lin = hex => new THREE.Color(hex).convertSRGBToLinear();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
 scene.fog = new THREE.Fog(0x0b0f14, 45, 90);
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
-scene.add(new THREE.HemisphereLight(0xa9bdd6, 0x1b222b, 0.95));
-const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(8, 22, 14); scene.add(sun);
-const carLight = new THREE.PointLight(0xfff0cc, 0.9, 9);
+const hemi = new THREE.HemisphereLight(0xa9bdd6, 0x1b222b, 0.3); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.8); scene.add(sun); scene.add(sun.target);
+// a tiny studio (soft boxes of light) becomes the reflection environment, so metal and glass look like metal and glass
+{ const pm = new THREE.PMREMGenerator(renderer), env = new THREE.Scene();
+  env.add(new THREE.Mesh(new THREE.BoxGeometry(24, 24, 24), new THREE.MeshBasicMaterial({ color: 0x1b2430, side: THREE.BackSide })));
+  [[0, 10, 0, 14, 0.4, 14, 0xffffff], [10, 2, 0, 0.4, 7, 12, 0xbfd4ff], [-10, 2, 0, 0.4, 7, 12, 0xffe2bd], [0, 2, 10, 12, 7, 0.4, 0xdfe8f5]].forEach(([x, y, z, w, h, d, c]) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); env.add(m); });
+  scene.environment = pm.fromScene(env, 0.04).texture; pm.dispose(); }
+const carLight = new THREE.PointLight(0xfff0cc, 0.5, 9);
 
-const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.25 }, o));
+const M = (c, o) => { const m = new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.25, envMapIntensity: 0.6 }, o)); m.color.convertSRGBToLinear(); m.emissive.convertSRGBToLinear(); return m; };
 const mats = {
   steel: M(0x8794a6, { metalness: 0.7, roughness: 0.4 }), dark: M(0x333c48), wall: M(0xc7ced8, { roughness: 0.8, metalness: 0.05 }),
-  slab: M(0x59636f, { roughness: 0.9 }), door: M(0xb9c3cf, { metalness: 0.6, roughness: 0.35 }),
-  glass: M(0x8fc2e8, { transparent: true, opacity: 0.12, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
-  glassCar: M(0x9fd0f0, { transparent: true, opacity: 0.22, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
+  slab: M(0x59636f, { roughness: 0.9 }), door: M(0xc9d2dc, { metalness: 0.85, roughness: 0.28 }), tile: M(0x8d98a5, { roughness: 0.45, metalness: 0.05 }),
+  glass: M(0x8fc2e8, { transparent: true, opacity: 0.1, roughness: 0.1, envMapIntensity: 0.2, side: THREE.DoubleSide, depthWrite: false }),
+  glassCar: M(0x9fd0f0, { transparent: true, opacity: 0.2, roughness: 0.1, envMapIntensity: 0.25, side: THREE.DoubleSide, depthWrite: false }),
   amber: M(0xffb23e, { emissive: 0xffa020, emissiveIntensity: 0.9 }), cw: M(0x4a525d, { roughness: 0.9, metalness: 0.3 })
 };
 const box = (w, h, d, m, x, y, z, par) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); (par || scene).add(o); return o; };
+sun.position.set(9, (TOP + 4.8) / 2 + 15, 13); sun.target.position.set(0, (TOP + 4.8) / 2, 0);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+{ const c = sun.shadow.camera, e = (TOP + 4.8) / 2 + 5; c.left = -e; c.right = e; c.top = e; c.bottom = -e; c.near = 1; c.far = 70; }
 const YS = TOP + 4.1, SH = TOP + 4.8, OV = 29 * SH / 17.6, OY = SH / 2 - 0.5;   // shaft height and overview framing follow the floor count
 
 box(2.8, 0.25, 3.0, mats.slab, 0, -0.6, -0.12);
@@ -764,21 +777,36 @@ const lamps = [], btnPanels = [], landL = [], landR = [], sensors = [];
 function label(txt, w) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
   g.fillStyle = '#05080b'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#ffb23e'; g.font = '700 84px "Chakra Petch",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 64, 70);
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+  const tx = new THREE.CanvasTexture(c); tx.encoding = THREE.sRGBEncoding;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: tx }));
+}
+// one shared position indicator (car floor and direction), shown above every landing door and inside the car
+const indC = document.createElement('canvas'); indC.width = 256; indC.height = 128;
+const indT = new THREE.CanvasTexture(indC); indT.encoding = THREE.sRGBEncoding; const indM = new THREE.MeshBasicMaterial({ map: indT }); let indS = '';
+function drawInd() {
+  const f = NAMES[Math.max(0, Math.min(N - 1, Math.round(X.pos / H)))], a = X.K_UP ? '▲' : X.K_DN ? '▼' : '', str = f + a; if (str === indS) return; indS = str;
+  const g = indC.getContext('2d'); g.fillStyle = '#05080b'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#ffb23e'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.font = '700 96px "Chakra Petch",sans-serif'; g.fillText(f, a ? 92 : 128, 70); if (a) { g.font = '700 60px sans-serif'; g.fillText(a, 186, 66); } indT.needsUpdate = true;
 }
 for (let i = 0; i < N; i++) {
   const y = i * H;
-  box(5.5, 0.2, 3.6, mats.slab, 0, y - 0.1, 3.05);
+  box(5.5, 0.2, 3.6, mats.slab, 0, y - 0.1, 3.05); box(5.5, 0.02, 3.6, mats.tile, 0, y + 0.006, 3.05);
   box(0.75, H - 0.05, 0.15, mats.wall, -0.925, y + H / 2 - 0.02, 1.25); box(0.75, H - 0.05, 0.15, mats.wall, 0.925, y + H / 2 - 0.02, 1.25);
   box(1.1, H - 2.15, 0.15, mats.wall, 0, y + 2.15 + (H - 2.15) / 2 - 0.02, 1.25);
   box(1.2, 0.06, 0.2, mats.dark, 0, y + 2.16, 1.3);
   landL.push(box(0.55, 2.1, 0.05, mats.door, -0.275, y + 1.05, 1.36)); landR.push(box(0.55, 2.1, 0.05, mats.door, 0.275, y + 1.05, 1.36));
-  const lab = label(NAMES[i], 0.42); lab.position.set(0, y + 2.62, 1.34); scene.add(lab);
+  for (const sx of [-0.585, 0.585]) box(0.07, 2.2, 0.22, mats.dark, sx, y + 1.1, 1.31);   // door frame
+  box(1.24, 0.02, 0.3, mats.steel, 0, y + 0.02, 1.3);   // sill
+  const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.31), indM); ind.position.set(0, y + 2.6, 1.335); scene.add(ind);
+  const lab = label(NAMES[i], 0.3); lab.position.set(-0.93, y + 1.75, 1.33); scene.add(lab);   // floor sign
+  box(1.8, 0.04, 0.3, new THREE.MeshBasicMaterial({ color: 0xfff1cf }), 0, y + H - 0.24, 2.5);   // hall ceiling light
+  const hl = new THREE.PointLight(0xfff0d8, 0.25, 7); hl.position.set(0, y + 2.7, 2.6); scene.add(hl);
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), M(0x224433, { emissive: 0x000000 })); lamp.position.set(0.5, y + 2.62, 1.36); scene.add(lamp); lamps.push(lamp);
   btnPanels.push(box(0.12, 0.2, 0.05, M(0x2b333c, { emissive: 0x000000 }), 1.05, y + 1.1, 1.36));
   sensors.push(box(0.1, 0.1, 0.06, M(0x2b333c, { emissive: 0x000000 }), -1.05, y + 1.3, 0.5));
 }
 const gnd = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), M(0x10151b, { roughness: 1, metalness: 0 })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -0.72; scene.add(gnd);
+const grid = new THREE.GridHelper(80, 80, 0x4a5766, 0x2a3541); grid.position.y = -0.715; grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
 
 const car = new THREE.Group(); scene.add(car);
 box(1.6, 0.08, 1.9, mats.slab, 0, 0.04, 0, car); box(1.6, 0.08, 1.9, mats.dark, 0, 2.36, 0, car);
@@ -798,6 +826,11 @@ box(0.05, 0.05, 0.05, eyeM, -0.57, 0.8, 1.0, car); box(0.05, 0.05, 0.05, eyeM, 0
 const beam = box(1.08, 0.015, 0.015, eyeM, 0, 0.8, 1.0, car);
 const hand = box(0.22, 1.0, 0.12, M(0xe0764a, { emissive: 0x552200 }), 0.12, 0.85, 1.0, car); hand.visible = false;
 carLight.position.set(0, 2.0, 0); car.add(carLight);
+box(1.3, 0.04, 0.04, mats.steel, 0, 0.95, -0.85, car);   // handrail
+box(0.2, 0.75, 0.03, mats.dark, 0.64, 1.3, 0.9, car);   // car operating panel on the front return, facing in
+const copBtns = NAMES.map((n, i) => { const m = M(0x3a4552, { emissive: 0x000000 }), b = box(0.07, 0.07, 0.02, m, 0.64, 1.05 + i * 0.11, 0.88, car); return m; });
+{ const d = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.085), indM); d.position.set(0.64, 1.58, 0.883); d.rotation.y = Math.PI; car.add(d); }
+for (const sx of [-0.84, 0.84]) for (const sy of [0.2, 2.25]) box(0.1, 0.16, 0.14, mats.dark, sx, sy, 0, car);   // guide shoes
 const vane = box(0.28, 0.5, 0.03, mats.amber, -0.9, 1.3, 0.5, car);
 const sgears = [-0.86, 0.86].map(x => box(0.12, 0.22, 0.22, M(0xff7a2a), x, -0.1, 0, car));
 const people = [], cols = [0x4aa3df, 0xe0764a, 0x7bc47f, 0xd4a5e8, 0xe8d36a, 0xc2c9d1];
@@ -808,16 +841,19 @@ for (let k = 0; k < 6; k++) {
   g.position.set(((k % 3) - 1) * 0.42, 0.08, -0.45 + Math.floor(k / 3) * 0.5); car.add(g); people.push(g);
 }
 const cw = box(0.7, 2.2, 0.2, mats.cw, 0, 0, -1.3);
+for (let k = 0; k < 7; k++) box(0.74, 0.035, 0.24, mats.dark, 0, -0.96 + k * 0.32, 0, cw);   // plate stack lines
+for (const sx of [-0.4, 0.4]) for (const sy of [-1.0, 1.0]) box(0.08, 0.14, 0.12, mats.dark, sx, sy, 0, cw);
 const ropeG = new THREE.CylinderGeometry(0.018, 0.018, 1, 6), ropeM = M(0x222a33, { metalness: 0.5 });
 const ropesCar = [], ropesCw = [];
 for (const rx of [-0.12, 0, 0.12]) for (const [arr, z] of [[ropesCar, 0], [ropesCw, -1.3]]) { const r = new THREE.Mesh(ropeG, ropeM); r.position.x = rx; r.position.z = z; scene.add(r); arr.push(r); }
 const sheave = new THREE.Group(); sheave.position.set(0, YS, -0.65); scene.add(sheave);
 const disc = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.4, 40), mats.steel); disc.rotation.z = Math.PI / 2; sheave.add(disc);
 for (let k = 0; k < 3; k++) { const sp = box(0.46, 1.1, 0.07, mats.amber, 0, 0, 0, sheave); sp.rotation.x = k * Math.PI / 3; }
+for (const rx of [-0.12, 0, 0.12]) { const gr = new THREE.Mesh(new THREE.TorusGeometry(R, 0.03, 8, 48), mats.dark); gr.rotation.y = Math.PI / 2; gr.position.x = rx; sheave.add(gr); }   // rope grooves
 // gearless motor, cut away: glass stator with 12 coils and a magnet rotor spinning inside
 box(1.9, 0.12, 1.2, mats.dark, 0.5, YS - 0.9, -0.65);
 const motorG = new THREE.Group(); motorG.position.set(0.5, YS, -0.65); scene.add(motorG);
-const stator = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.44, 36, 1, true), M(0x6f8aa6, { transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })); stator.rotation.z = Math.PI / 2; motorG.add(stator);
+const stator = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.44, 36, 1, true), M(0x6f8aa6, { transparent: true, opacity: 0.22, envMapIntensity: 0.25, side: THREE.DoubleSide, depthWrite: false })); stator.rotation.z = Math.PI / 2; motorG.add(stator);
 const ring = (n, r, build) => { for (let j = 0; j < n; j++) { const a = j * Math.PI * 2 / n, o = build(j); o.position.set(0, r * Math.cos(a), r * Math.sin(a)); o.rotation.x = a; } };
 const coilMats = [];
 ring(12, 0.55, () => { const m = M(0xb8651b, { emissive: 0x000000 }); coilMats.push(m); return box(0.36, 0.16, 0.14, m, 0, 0, 0, motorG); });
@@ -842,6 +878,9 @@ const cab = box(0.5, 1.5, 0.5, M(0x3a4552, { metalness: 0.3 }), -1.0, YS - 0.25,
 const cabLamps = ['K_SAFE', 'K_RUN', 'K_UP', 'K_DN', 'K_BRK', 'K_DOP', 'K_DCL', 'K_REQ'].map((k, n) => {
   const m = M(0x14301f, { emissive: 0x000000 }), s = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), m);
   s.position.set(-1.0 + ((n % 4) - 1.5) * 0.11, YS + 0.15 + Math.floor(n / 4) * 0.13, 1.16); scene.add(s); return [m, k]; });
+
+scene.traverse(o => { if (o.isMesh && o.material.isMeshStandardMaterial && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
+gnd.castShadow = false;
 
 // orbit camera
 let az = 0.5, el = 0.2, dist = 9, camMode = 'follow', camAnim = null, focus = null, brkVis = 0, panY = OY, sliding = false, zoomMul = 1;
@@ -885,8 +924,9 @@ function update3D(t) {
     const o = Math.abs(X.pos - i * H) < 0.15 ? open : 0;
     landL[i].position.x = -0.275 - 0.5 * o; landR[i].position.x = 0.275 + 0.5 * o;
     lamps[i].material.emissive.setHex(Math.abs(X.pos - i * H) < 0.6 ? 0x33ff99 : 0x000000);
-    btnPanels[i].material.emissive.setHex(X.CALL[i] ? 0xffaa22 : 0x000000);
+    btnPanels[i].material.emissive.setHex(X.CALL[i] ? 0xffaa22 : 0x000000); copBtns[i].emissive.setHex(X.CALL[i] ? 0xffaa22 : 0x000000);
   }
+  drawInd();
   const showEye = X.door > 0.001 || X.userObs;
   beam.visible = showEye; hand.visible = X.userObs && X.door > 0.05;
   eyeM.color.setHex(X.photo ? 0xffd23a : 0xff4433); beam.scale.y = X.photo ? 3 : 1; beam.scale.z = X.photo ? 3 : 1;
@@ -911,7 +951,7 @@ function updateCam(dt) {
   const f = 1 - Math.pow(0.001, dt);
   tgt.x += (gx - tgt.x) * f; tgt.y += (gy - tgt.y) * f; tgt.z += (gz - tgt.z) * f;
   if (!sliding) vs.value = Math.max(-1, Math.min(YS + 1, tgt.y));   // the slider follows the camera height
-  if ((explainOn || tourT) && camMode === 'part' && focus && !canvas._l) {   // slow orbit and dolly while a part is explained
+  if (explainOn && !calm && camMode === 'part' && focus && !canvas._l) {   // slow orbit and dolly while a part is explained
     const tt = (performance.now() - partT0) / 1000;
     if (camAnim) { const ph = tt * 0.6; camAnim.az = focus.az + [0.55, -0.55, 0.35][partK] * Math.sin(ph); camAnim.el = Math.max(0.05, Math.min(0.5, focus.el + 0.07 * Math.sin(ph * 0.8 + partK))); }   // sweep back and forth around the best viewing angle so the part stays in view
     goal.d = focus.d * (1 - [0.22, 0.12, 0.3][partK] * Math.min(1, tt / 4)) * zoomMul;
@@ -1056,9 +1096,26 @@ const tech = {
   buffer: "At the rated 2.4 metres per second, real installations use oil buffers; the springs here are a simplification."
 };
 const txt = p => level === 'simple' ? { role: simple[p.id][0], how: simple[p.id][1], talk: simple[p.id][2] } : { role: p.role, how: p.how, talk: p.talk + ' ' + tech[p.id] };
-function renderCard(p) { const t = txt(p); $('#pname').textContent = p.name; $('#prole').textContent = t.role; $('#phow').textContent = t.how; }
+const watchFor = { room: 'Watch the lamps on the controller cabinet change as the lift works.', motor: 'Watch the coils light up in turn while the magnets spin.', sheave: 'Watch the amber spokes turn as the ropes move.',
+  brake: 'Watch the two dark shoes move apart when the lamp turns green.', ctrl: 'Watch which lamps are lit when the car starts and when the doors move.', gov: 'Watch the wheel spin faster as the car speeds up.',
+  ropes: 'Watch the car side get shorter as the counterweight side gets longer.', cw: 'Watch it go down whenever the car goes up.', car: 'Watch the buttons inside light up for each stored call.',
+  cardoor: 'Watch the amber pulley on the roof turn as the panels slide.', eye: 'Watch the beam turn yellow when the hand blocks it.', landing: 'Watch the display above the door follow the car.',
+  hall: 'Watch the button glow while its call is stored.', rails: 'Watch the guide shoes slide along the rails.', sgear: 'Look for the orange blocks at the bottom corners of the car.',
+  sensor: 'Watch the sensor glow green as the vane passes.', buffer: 'Look for the red buffers at the bottom of the pit.' };
+function renderCard(p) { const t = txt(p); $('#pname').textContent = p.name; $('#prole').textContent = t.role; $('#phow').textContent = t.how; $('#pwatch').textContent = watchFor[p.id] || ''; }
+// during Play all, each part shows itself working: the door opens, the beam gets blocked, the car travels
+function partAct(id, alive) {
+  const idle = X.STOPPED && X.CALL.every(c => !c), travel = () => { if (idle && X.LS_DC) press(nf() >= N / 2 ? 0 : N - 1); };
+  // wait until the car is parked at a floor, then run fn (gives up after 16 s or when the part changes)
+  const parked = fn => { let n = 0; const t = setInterval(() => { if (!alive() || sel.id !== id || ++n > 80) return clearInterval(t); if (X.STOPPED && X.ATFL) { clearInterval(t); fn(); } }, 200); };
+  if (id === 'cardoor' || id === 'landing') parked(pressOpen);
+  else if (id === 'eye') parked(() => { pressOpen(); setTimeout(() => { if (alive() && sel.id === 'eye') { X.userObs = true; syncToggles(); setTimeout(() => { X.userObs = false; syncToggles(); }, 3500); } }, 2600); });
+  else if (id === 'hall') { if (!X.FS[2]) press(2); else travel(); }
+  else if (id !== 'sgear' && id !== 'buffer') travel();
+}
 
-let sel = parts[0], tourT = null, labelsOn = false, partT0 = 0, partK = 0;
+let sel = parts[0], labelsOn = false, partT0 = 0, partK = 0;
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;   // no camera sweep for viewers who ask for less motion
 const hotsEl = $('#hots'), plist = $('#plist');
 parts.forEach((p, i) => {
   const h = document.createElement('button'); h.className = 'hot'; h.innerHTML = `<span>${i + 1}</span><em>${p.name}</em>`; h.setAttribute('aria-label', p.name); h.onclick = () => selectPart(p.id); hotsEl.appendChild(h); p.hot = h;
@@ -1141,13 +1198,13 @@ async function speakText(text, alive, onSent) {
 const speakTitle = async (t, alive) => { await speakOne(t, voiceRate * 0.9, 1.12, alive); await sleep(950); };   // slower, then a clear pause so the title is heard as a heading
 const setExBtn = on => { $('#bExplain').textContent = on ? '■ Stop' : '▶ Play all parts'; $('#bExplain').classList.toggle('running', on); };
 async function runExplain(start = 0) {
-  stopTour(); const id = ++exId, alive = () => id === exId; explainOn = true; setExBtn(true); await sleep(150);   // let a cancelled utterance clear before speaking press(N - 1);
+  stopTour(); const id = ++exId, alive = () => id === exId; explainOn = true; setExBtn(true); await sleep(150);   // let a cancelled utterance clear before speaking
   for (let i = start; i < parts.length; i++) {
     if (!alive()) return;
     const p = parts[i], t0 = performance.now(), head = `<b>${i + 1}/${parts.length} · ${p.name}</b> `;
-    selectPart(p.id, true);
-    if (voiceOn) { say(head + txt(p).role); await speakTitle(p.name, alive); await speakText(txt(p).talk, alive, s => say(head + s)); await sleep(Math.max(0, pace * 1000 - (performance.now() - t0))); }   // the part name is spoken first
-    else { const t = txt(p); say(head + `${t.role} ${t.how.split('. ')[0].replace(/\.$/, '')}.`); await sleep(pace * 1000); }
+    selectPart(p.id, true); partAct(p.id, alive);
+    if (voiceOn) { say(head + txt(p).role); await speakTitle(p.name, alive); await speakText(txt(p).talk + ' ' + (watchFor[p.id] || ''), alive, s => say(head + s)); await sleep(Math.max(0, pace * 1000 - (performance.now() - t0))); }   // the part name is spoken first
+    else { const t = txt(p); say(head + `${t.role} ${watchFor[p.id] || ''}`); await sleep(pace * 1000); }
   }
   if (alive()) { stopTour(); say('<b>Explain finished.</b> Click any numbered marker or part name to look at it again.'); }
 }
@@ -1160,8 +1217,18 @@ function placeHots() {
     if (ok) { p.hot.style.left = ((v.x + 1) / 2 * rw) + 'px'; p.hot.style.top = ((1 - v.y) / 2 * rh) + 'px'; } });
 }
 const hlPool = [], hlDummy = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+// circuit and demo coordination: a hovered rung or the current demo step outlines its part in 3D
+let hoverHL = null, hoverUntil = 0, demoHL = null;
+const partObjs = ids => () => ids.flatMap(id => { const q = parts.find(z => z.id === id); return q ? q.hl() : []; });
+function hoverRung(lab) {
+  const m = /^K_UP|^K_DN/.test(lab) ? ['motor'] : lab === 'K_BRK' ? ['brake'] : /^K_DOP|^K_DCL|^K_REQ|^K_CLS|^T1/.test(lab) ? ['cardoor'] : /^K_SAFE|^K_RUN/.test(lab) ? ['ctrl'] : /^ARR|^SLOW/.test(lab) ? ['sensor'] : /^UP_OK|^DN_OK/.test(lab) ? ['rails'] : null;
+  if (/^CALL /.test(lab)) { const i = NAMES.indexOf(lab.slice(5)); hoverHL = () => [btnPanels[i]]; } else if (m) hoverHL = partObjs(m); else { hoverHL = null; return false; }
+  hoverUntil = performance.now() + 4000; return true;
+}
+const KEYS = [[/photo-eye|beam/i, 'eye'], [/K_BRK|brake/i, 'brake'], [/K_UP|K_DN|motor driving|sheave/i, 'motor'], [/counterweight/i, 'cw'], [/K_DOP|K_DCL|\bdoors?\b|LS1|LS2/i, 'cardoor'], [/floor sensor|\bARR\b|SLOW/i, 'sensor'], [/K_SAFE|E-STOP|safety chain/i, 'ctrl'], [/\bCALL\b|BTN/, 'hall']];
+function cueDemo(text) { const hits = KEYS.map(([re, id]) => [text.search(re), id]).filter(h => h[0] >= 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map(h => h[1]); demoHL = hits.length ? partObjs(hits) : null; }
 function updateHL(now) {
-  const objs = panelName === 'parts' ? sel.hl() : [];
+  const objs = panelName === 'parts' ? sel.hl() : hoverHL && now < hoverUntil ? hoverHL() : demoOn && demoHL ? demoHL() : [];
   objs.forEach((o, i) => { let h = hlPool[i]; if (!h) { h = hlPool[i] = new THREE.BoxHelper(hlDummy, 0xffb23e); h.material.depthTest = false; h.material.transparent = true; h.renderOrder = 10; scene.add(h); }
     h.visible = true; h.setFromObject(o); h.material.opacity = 0.65 + 0.35 * Math.sin(now / 180); });
   for (let i = objs.length; i < hlPool.length; i++) hlPool[i].visible = false;
@@ -1252,7 +1319,7 @@ function resetBtns() { lab('#bDemo', '▶ Full demo'); lab('#bDoorDemo', '▶ Do
 function reset() { stopTour(); stopDemo(); initState(); prev = {}; logBuf.length = 0; $('#log').innerHTML = ''; syncToggles(); resetBtns(); say('Reset. The car is parked at G with doors closed.'); }
 $('#bReset').onclick = reset;
 const lab = (sel, t) => { const b = $(sel); b.querySelector('b').textContent = t; b.classList.toggle('running', t.startsWith('■')); };
-function stopDemo() { const was = demoOn; demoRun++; demoOn = false; simPaused = false; resetBtns(); if (was) stopSpeech(); }
+function stopDemo() { const was = demoOn; demoRun++; demoOn = false; demoHL = null; simPaused = false; resetBtns(); if (was) stopSpeech(); }
 // segmented choices
 const pick = (attr, set) => document.querySelectorAll('[' + attr + ']').forEach(b => b.onclick = () => { document.querySelectorAll('[' + attr + ']').forEach(x => x.setAttribute('aria-pressed', x === b)); set(b.getAttribute(attr)); });
 pick('data-lv', v => { level = v; renderCard(sel); }); pick('data-pc', v => { pace = +v; }); pick('data-vr', v => { voiceRate = +v; });
@@ -1304,7 +1371,7 @@ async function runDemo(kind) {
   const wait = s => { const t0 = X.t; return until(() => X.t - t0 >= s); };
   const flag = (k, v) => { X[k] = v; syncToggles(); log(flagMsg[k][v ? 0 : 1], v ? 'r' : 'g'); };
   // caption, then (when voice is on) pause the simulation until the narration finishes
-  const narr = async h => { say(h); if (!voiceOn) return; simPaused = true; try {
+  const narr = async h => { say(h); cueDemo(h.replace(/<[^>]+>/g, ' ')); if (!voiceOn) return; simPaused = true; try {
     const alive = () => id === demoRun, plain = t => t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), m = h.match(/^<b>(.*?)<\/b>\s*([\s\S]*)$/);
     if (m) { await speakTitle(plain(m[1]).replace(/^(\d+)\s*·\s*/, 'Step $1, ').replace(/\.$/, ''), alive); await speakText(plain(m[2]), alive); } else await speakText(plain(h), alive);
   } finally { simPaused = false; } };
@@ -1402,7 +1469,8 @@ openSub('power');
 const root = document.documentElement, dayMq = matchMedia('(prefers-color-scheme: light)');
 const isDay = () => root.dataset.theme ? root.dataset.theme === 'light' : dayMq.matches;
 function applyTheme() {
-  const day = isDay(); scene.background.setHex(day ? 0xe3e9f0 : 0x0b0f14); scene.fog.color.setHex(day ? 0xe3e9f0 : 0x0b0f14); gnd.material.color.setHex(day ? 0xc9d1db : 0x10151b);
+  const day = isDay(); scene.background.copy(lin(day ? 0xdfe6ee : 0x0b0f14)); scene.fog.color.copy(lin(day ? 0xdfe6ee : 0x0b0f14)); gnd.material.color.copy(lin(day ? 0xc3ccd6 : 0x10151b));
+  hemi.intensity = day ? 0.6 : 0.3; sun.intensity = day ? 1.0 : 0.8; renderer.toneMappingExposure = day ? 0.95 : 0.9; grid.material.opacity = day ? 0.25 : 0.35;
   document.querySelectorAll('[data-th]').forEach(b => b.setAttribute('aria-pressed', (b.dataset.th === 'light') === day)); colC = null;
 }
 try { const t = localStorage.getItem('lift-theme'); if (t === 'light' || t === 'dark') root.dataset.theme = t; } catch (e) { }
