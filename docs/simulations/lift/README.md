@@ -1,6 +1,6 @@
 # Lift Control Lab
 
-An interactive five-floor traction lift simulation in a single HTML file (`index.html`).
+An interactive four-stop traction lift (ground plus three floors) simulation in a single HTML file (`index.html`).
 
 - Live 3D shaft (three.js) and machine room, driven by the same controller model as the circuit views
 - Power circuit, relay control ladder with per-rung notes, inputs and outputs, and a motor and drive simulation
