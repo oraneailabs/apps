@@ -1,0 +1,1174 @@
+<meta charset="utf-8">
+<title>Lift Control Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky control bar on top, one big 3D stage, and a side panel (circuit, log, guide) that opens only when asked for. */
+:root{
+  --bg:#0e1319; --panel:#151c24; --panel2:#1b242e; --line:#2a3541;
+  --fg:#e6ebf1; --muted:#8b98a7; --live:#3ddc97; --amber:#ffb23e; --danger:#ff6b5e; --wire:#46525f;
+  --on-amber:#1a1204;
+  --display:"Chakra Petch",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#eef1f5; --panel:#ffffff; --panel2:#f3f5f8; --line:#d3dae3; --fg:#18212b; --muted:#5b6876;
+  --live:#0b9b60; --amber:#b86a00; --danger:#c8372b; --wire:#a5afbb; --on-amber:#fff; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#eef1f5; --panel:#ffffff; --panel2:#f3f5f8; --line:#d3dae3; --fg:#18212b; --muted:#5b6876;
+  --live:#0b9b60; --amber:#b86a00; --danger:#c8372b; --wire:#a5afbb; --on-amber:#fff; color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);padding-bottom:28px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:20}
+.wrap{max-width:1500px;margin:0 auto}
+h1,h2,h3,h4{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:20px;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+h3{font-size:15px;font-weight:600}
+h4{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-bottom:6px}
+/* top control bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.bar1{justify-content:space-between}
+.grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.gl{font:600 10.5px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+button{font:500 13px var(--body);color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:6px 12px;cursor:pointer;min-height:32px}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button.pri{background:var(--amber);border-color:var(--amber);color:var(--on-amber);font-weight:600}
+button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,var(--panel2))}
+button.pill[aria-pressed="true"]{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 14%,var(--panel2))}
+.fl button{width:38px;padding:6px 0;font:700 15px var(--display);text-align:center}
+.fl button.lit{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+.fl button.here{background:var(--amber);color:var(--on-amber);border-color:var(--amber)}
+/* main: stage + optional panel */
+.main{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
+.main.open{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}
+@media(max-width:1000px){.main.open{grid-template-columns:minmax(0,1fr)}}
+.stage,.panel{height:clamp(440px,calc(100vh - 170px),820px)}
+@media(max-width:1000px){.stage{height:clamp(380px,60vh,560px)}.panel{height:auto;max-height:85vh}}
+.stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#0b0f14}
+#view{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view:active{cursor:grabbing}
+.hud{position:absolute;left:12px;top:12px;display:flex;gap:10px;align-items:stretch;pointer-events:none}
+.disp{background:#05080b;border:1px solid #2a3541;border-radius:4px;padding:6px 12px;min-width:100px;color:#ffb23e;font-family:var(--mono)}
+.disp .big{font:700 40px/1 var(--display);display:flex;gap:8px;align-items:baseline}
+.disp .big small{font-size:18px}
+.disp .sub{font-size:11px;letter-spacing:.06em;color:#c9a35f;margin-top:2px}
+.dbar{height:4px;background:#2a3541;border-radius:2px;margin-top:4px;overflow:hidden}
+.dbar i{display:block;height:100%;width:0;background:#ffb23e}
+.lamps{display:flex;flex-direction:column;gap:4px;justify-content:center}
+.lamp{display:flex;align-items:center;gap:6px;font:500 11px var(--mono);color:#aab6c3;background:#05080bcc;border:1px solid #2a3541;border-radius:3px;padding:2px 8px}
+.lamp i{width:8px;height:8px;border-radius:50%;background:#37424e}
+.lamp.on i{background:#3ddc97;box-shadow:0 0 8px #3ddc97}
+.lamp.warn.on i{background:#ff6b5e;box-shadow:0 0 8px #ff6b5e}
+.camtabs{position:absolute;right:12px;top:12px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:55%}
+.camtabs button{padding:3px 9px;min-height:0;font-size:12px;background:#05080bcc;color:#cfd7e0;border-color:#2a3541}
+.camtabs button[aria-pressed="true"]{background:#ffb23e;color:#1a1204;border-color:#ffb23e}
+.say{position:absolute;left:12px;right:12px;bottom:12px;background:#05080bee;color:#e6ebf1;border:1px solid #2a3541;border-radius:4px;padding:8px 12px;font-size:13px;min-height:42px}
+.say b{color:#ffb23e;font-family:var(--display);letter-spacing:.05em}
+/* side panel */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0}
+.panel[hidden]{display:none}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pbody{overflow:auto;padding:12px 14px;min-height:0;flex:1}
+.pane[hidden],.sub[hidden]{display:none}
+.explain{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:4px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.explain p{margin:0}.explain p+p{margin-top:4px}
+.explain b{color:var(--amber)}
+.explain .m{color:var(--muted)}
+#log{font:12px/1.55 var(--mono);height:100%;min-height:200px}
+#log div{display:flex;gap:10px}
+#log time{color:var(--muted);flex:none}
+#log .e{color:var(--amber)} #log .g{color:var(--live)} #log .r{color:var(--danger)}
+/* diagrams */
+.dwrap{overflow:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel2)}
+.diag{display:block;width:100%;min-width:600px;height:auto}
+.diag text{font-family:var(--mono);font-size:10px;fill:var(--muted)}
+.diag text.lb{fill:var(--fg)}
+.diag .sec{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.1em;fill:var(--amber)}
+.diag .rn{font-size:8px;fill:var(--wire)}
+.diag .big{font-size:12px;fill:var(--fg);font-weight:500}
+.diag line,.diag path,.diag circle,.diag rect{stroke:var(--wire);stroke-width:1.6;fill:none;stroke-linecap:round}
+.diag .p{stroke:var(--live)}
+.diag .rail{stroke:var(--muted);stroke-width:2.4}
+.diag .sym{stroke:var(--muted)}
+.diag .cl .sym{stroke:var(--live);stroke-width:2.2}
+.diag .cl text.lb{fill:var(--live)}
+.diag .coil circle,.diag .coil rect,.diag .mot{stroke:var(--muted)}
+.diag .coil.on circle,.diag .coil.on rect,.diag .mot.on{stroke:var(--live);fill:color-mix(in srgb,var(--live) 30%,transparent)}
+.diag .coil.on text{fill:var(--live)}
+.diag .dot{fill:var(--muted);stroke:none}
+.diag .rotor{fill:var(--amber);stroke:none}
+.diag .node rect{stroke:var(--wire)}
+.diag .node.ok rect{stroke:var(--live)}
+.diag .node.bad rect{stroke:var(--danger);fill:color-mix(in srgb,var(--danger) 20%,transparent)}
+.diag .node.ok text{fill:var(--live)} .diag .node.bad text{fill:var(--danger)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:0 0 8px}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.legend i{display:inline-block;width:18px;height:3px;background:var(--wire);border-radius:2px}
+.legend i.l{background:var(--live)}
+.rnote{min-height:40px;margin-top:8px;font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:4px;padding:6px 10px}
+.rnote b{color:var(--amber);font-family:var(--mono)}
+.io{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px;margin-bottom:14px}
+.chip{display:flex;align-items:center;gap:7px;font:12px var(--mono);color:var(--muted);padding:2px 0}
+.chip i{flex:none;width:9px;height:9px;border-radius:50%;background:var(--wire)}
+.chip.on{color:var(--fg)}.chip.on i{background:var(--live);box-shadow:0 0 6px var(--live)}
+.chip.on.w i{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.tele{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+.tele div{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:6px 10px}
+.tele span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.tele b{font:600 17px var(--display);font-variant-numeric:tabular-nums}
+.guide{display:grid;gap:14px}
+.guide p{margin:4px 0 0;color:var(--muted)}
+.guide b{color:var(--fg);font-weight:600}
+code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+select{font:500 13px var(--body);color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:5px 8px;min-height:32px}
+.hots{position:absolute;inset:0;pointer-events:none;z-index:2}
+.hots[hidden],.seg[hidden],button[hidden]{display:none}
+.hot{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;padding:0;min-height:0;pointer-events:auto;background:#05080bdd;color:#ffb23e;border:1.5px solid #ffb23e;font:700 11px var(--mono);display:grid;place-items:center}
+.hot em{display:none;position:absolute;left:30px;top:50%;transform:translateY(-50%);white-space:nowrap;font:500 12px var(--body);font-style:normal;background:#05080bee;color:#e6ebf1;border:1px solid #2a3541;border-radius:3px;padding:2px 8px}
+.hot:hover,.hot.sel{z-index:3}.hot:hover em,.hot.sel em{display:block}
+.hot.sel{background:#ffb23e;color:#1a1204}
+.plist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-bottom:12px}
+.plist button{display:flex;gap:8px;align-items:center;text-align:left;font-size:12.5px;padding:5px 8px}
+.plist button b{font:700 11px var(--mono);color:var(--amber);width:16px;flex:none}
+.plist button.on{border-color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,var(--panel2))}
+.pcard{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:4px;background:var(--panel2);padding:12px 14px}
+.pcard h3{font-size:18px}.pcard .role{margin:4px 0 8px;font-weight:500}.pcard p{margin:6px 0;color:var(--muted)}
+.pcard .lv{margin-top:10px;font:12.5px var(--mono);color:var(--live);border-top:1px dashed var(--line);padding-top:8px}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="bar bar1">
+      <h1>Lift Control Lab</h1>
+      <div class="grp">
+        <span class="gl">Show</span>
+        <div class="seg">
+          <button data-panel="parts" aria-pressed="false">Explain lift</button>
+          <button data-panel="circuit" aria-pressed="false">Circuit</button>
+          <button data-panel="log" aria-pressed="false">Event log</button>
+          <button data-panel="guide" aria-pressed="false">How it works</button>
+        </div>
+        <span class="gl" style="margin-left:6px">Speed</span>
+        <div class="seg" id="speeds"><button data-sp="1" aria-pressed="false">1×</button><button data-sp="2" aria-pressed="true">2×</button><button data-sp="4" aria-pressed="false">4×</button></div>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="grp"><span class="gl">Call</span><div class="seg fl" id="floors"></div></div>
+      <div class="grp"><span class="gl">Door</span><div class="seg"><button id="bOpen">Open</button><button id="bClose">Close</button></div></div>
+      <div class="grp"><span class="gl">Faults</span><div class="seg">
+        <button class="pill" id="tEstop" aria-pressed="false" title="Opens the safety chain and sets the brake">E-Stop</button>
+        <button class="pill" id="tOvld" aria-pressed="false" title="Car will not leave; doors stay open">Overload</button>
+        <button class="pill" id="tObs" aria-pressed="false" title="Closing door reverses and reopens">Block door eye</button></div></div>
+      <div class="grp"><span class="gl">Run</span><div class="seg">
+        <button class="pri" id="bDemo">▶ Full demo</button><button class="pri" id="bDoorDemo">▶ Door demo</button><button id="bReset">Reset</button></div></div>
+      <div class="grp"><span class="gl">Explain</span><div class="seg"><button class="pri" id="bExplain">▶ Explain demo</button>
+        <select id="expLevel" aria-label="Explanation level"><option value="simple" selected>Explain simple</option><option value="tech">Explain technical</option></select>
+        <select id="expPace" aria-label="Seconds per part"><option value="2" selected>2 s per part</option><option value="4">4 s per part</option><option value="8">8 s per part</option></select>
+        <select id="expVoice" aria-label="Voice narration"><option value="0" selected>Voice off</option><option value="0.75">Voice slow</option><option value="0.9">Voice normal</option><option value="1.1">Voice fast</option></select>
+        <select id="expVoiceName" aria-label="Voice" style="max-width:190px"></select></div></div>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="stage">
+      <canvas id="view" aria-label="3D view of the lift shaft"></canvas>
+      <div class="hots" id="hots" hidden></div>
+      <div class="hud">
+        <div class="disp"><div class="big"><span id="dFloor">G</span><small id="dDir">•</small></div><div class="sub" id="dDoor">DOORS CLOSED</div><div class="dbar"><i id="dBar"></i></div><div class="sub" id="dVel">0.00 m/s</div></div>
+        <div class="lamps">
+          <div class="lamp" id="lMotor"><i></i>MOTOR OFF</div>
+          <div class="lamp" id="lBrake"><i></i>BRAKE SET</div>
+          <div class="lamp warn" id="lSafe"><i></i>SAFETY OK</div>
+        </div>
+      </div>
+      <div class="camtabs">
+        <button data-cam="overview" aria-pressed="true">Overview</button>
+        <button data-cam="follow" aria-pressed="false">Follow car</button>
+        <button data-cam="doors" aria-pressed="false">Doors</button>
+        <button data-cam="machine" aria-pressed="false">Machine room</button>
+        <button id="bLabels" aria-pressed="false">Labels</button>
+      </div>
+      <div class="say" id="say">Press a floor button above to call the lift, or try the door demo. Drag the view to orbit, scroll to zoom.</div>
+    </div>
+
+    <aside class="panel" id="panel" hidden>
+      <div class="phead">
+        <h3 id="ptitle">Circuit</h3>
+        <div class="seg" id="subtabs">
+          <button data-sub="power" aria-pressed="true">Power circuit</button>
+          <button data-sub="motor" aria-pressed="false">Motor &amp; drive</button>
+          <button data-sub="ladder" aria-pressed="false">Control ladder</button>
+          <button data-sub="io" aria-pressed="false">Inputs and outputs</button>
+        </div>
+        <button id="pclose" aria-label="Close panel">Close ✕</button>
+      </div>
+      <div class="pbody">
+        <div class="pane" data-pane="circuit">
+          <div class="explain" id="explain"></div>
+          <div class="sub" data-subpane="power">
+            <p class="legend"><span><i></i>dead</span><span><i class="l"></i>live</span><span>Contacts close when their coil is energised; limit switches (NC) open at the end of travel.</span></p>
+            <div class="dwrap"><svg class="diag" id="pwr" viewBox="0 0 740 570" role="img" aria-label="Live power circuit"></svg></div>
+          </div>
+          <div class="sub" data-subpane="ladder" hidden>
+            <p class="legend"><span><i></i>de-energised</span><span><i class="l"></i>power flowing</span><span>Hover or tap a rung to read what it does.</span></p>
+            <div class="dwrap" style="max-height:62vh"><svg class="diag" id="lad" role="img" aria-label="Live relay ladder"></svg></div>
+            <div class="rnote" id="rnote">Hover a rung to see its purpose.</div>
+          </div>
+          <div class="sub" data-subpane="motor" hidden>
+            <p class="legend"><span>Live model of the gearless motor, its drive and the brake. Calls a heavy or light car to see motoring versus regenerating.</span></p>
+            <canvas id="mcv" width="1280" height="1400" style="width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel2)"></canvas>
+          </div>
+          <div class="sub" data-subpane="io" hidden><div id="iop"></div></div>
+        </div>
+        <div class="pane" data-pane="parts" hidden>
+          <div class="seg" style="margin-bottom:10px"><button id="bTour">▶ Guided tour</button></div>
+          <div class="plist" id="plist"></div>
+          <div class="pcard"><h3 id="pname"></h3><p class="role" id="prole"></p><p id="phow"></p><div class="seg"><button id="plink" hidden></button></div><div class="lv" id="plive"></div></div>
+        </div>
+        <div class="pane" data-pane="log" hidden><div id="log"></div></div>
+        <div class="pane" data-pane="guide" hidden>
+          <div class="guide">
+            <div><h3>Call memory</h3><p>Each floor has a <b>CALL</b> relay with a seal-in: the button contact is in parallel with the relay's own contact, so one tap is remembered. It clears only when the car stands at that floor with the door fully open (<code>LS2</code>).</p></div>
+            <div><h3>Direction logic</h3><p><b>CALL ABOVE</b> and <b>CALL BELOW</b> compare the car position with every stored call. The car keeps its direction while calls remain ahead, then reverses, so it serves 4 before turning back for 1.</p></div>
+            <div><h3>Power circuit</h3><p><b>K_UP</b> and <b>K_DN</b> are two contactors wired to the same motor with two phases swapped, so closing one runs the motor forward and the other backward. They are interlocked so both can never close. <b>K_BRK</b> energises brake coil <b>Y1</b>, which releases the spring-applied brake.</p></div>
+            <div><h3>Landing</h3><p>When a call is within 1.8 m ahead, <b>SLOW</b> drops the target speed to a 0.3 m/s creep. At the floor, the sensor closes <b>ARR</b>, the contactor drops and the brake sets.</p></div>
+            <div><h3>Doors</h3><p><b>K_REQ</b> (arrival, OPEN button, photo-eye or overload) energises <b>K_DOP</b>, which drives door motor M2 until limit switch <code>LS2</code> opens its circuit. Timer <b>T1</b> counts 3 s, then <b>K_DCL</b> closes the door until <code>LS1</code>. A blocked photo-eye reverses the door. <b>K_RUN</b> needs <code>LS1</code>, so the car can't leave with an open door.</p></div>
+            <div><h3>Safety</h3><p>E-stop or overload opens the safety chain: <b>K_SAFE</b> and <b>K_RUN</b> drop, both contactors drop and the brake clamps. Stored calls survive and the car resumes when the fault clears.</p></div>
+            <div><h3>The 3D model</h3><p>A traction machine turns the sheave. The car and counterweight hang on opposite sides of it, so one rises while the other falls. The controller scans at 120 Hz like a PLC, and the 3D scene and diagrams draw the same state.</p></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const N = 5, H = 3.2, TOP = (N - 1) * H, VMAX = 2.4, VC = 0.3, ACC = 1.2, DEC = 2.2, DOOR_T = 2.0, SLOWD = 1.8, R = 0.65;
+const NAMES = ['G', '1', '2', '3', '4'];
+const $ = s => document.querySelector(s);
+const fmtT = t => String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+
+/* ---------------- controller state ---------------- */
+let X, scans = 0, speed = 2, lastS = 0;
+const hist = [];
+function initState() {
+  X = { t: 0, dt: 1 / 120, pos: 0, v: 0, door: 0, lastUp: true,
+    estop: false, ovld: false, userObs: false, photo: false, openBtn: false, closeBtn: false, openUntil: 0, closeUntil: 0,
+    btn: Array(N).fill(false), btnUntil: Array(N).fill(0), CALL: Array(N).fill(false), FS: Array(N).fill(false),
+    LS_DC: true, LS_DO: false, STOPPED: true, ATFL: true, TOPLIM: false, BOTLIM: true,
+    K_SAFE: false, K_RUN: false, RA: false, RB: false, ARR: false, SLOW: false, PRI_UP: false, PRI_DN: false, UP_OK: false, DN_OK: false,
+    K_UP: false, K_DN: false, K_BRK: false, K_REQ: false, K_CLS: false, K_DOP: false, K_DCL: false, T1acc: 0, T1done: false, pv: 0, tq: 0, pw: 0, rpm: 0, hz: 0, amp: 0, load: 150 };
+  hist.length = 0; lastS = 0;
+}
+initState();
+
+/* ---------------- ladder program (data drives both logic and drawing) ---------------- */
+const no = (label, f) => ({ t: 'NO', label, f });
+const nc = (label, f) => ({ t: 'NC', label, f });
+const key = k => () => X[k];
+const coilOf = (label, k) => ({ label, get: () => X[k], set: v => { X[k] = v; } });
+const rungs = [];
+const sec = title => rungs.push({ sec: title });
+const rung = (els, coil, br, note) => rungs.push({ els, coil, br: br || [], note });
+
+sec('SAFETY');
+rung([nc('E-STOP', key('estop')), nc('OVERLOAD', key('ovld'))], coilOf('K_SAFE', 'K_SAFE'), [],
+  'Safety chain. Both normally-closed contacts must be closed. Pressing E-STOP or tripping the overload sensor drops K_SAFE, and with it the whole drive.');
+rung([no('K_SAFE', key('K_SAFE')), no('DOOR CLOSED', key('LS_DC'))], coilOf('K_RUN', 'K_RUN'), [],
+  'Run permit. Safety chain healthy and door fully closed (limit switch LS1). Nothing can move without K_RUN, so the car never leaves with the door open.');
+sec('CALL MEMORY (SEAL-IN)');
+for (let i = 0; i < N; i++)
+  rung([no('BTN ' + NAMES[i], () => X.btn[i]), nc('SERVED ' + NAMES[i], () => X.LS_DO && X.FS[i])],
+    { label: 'CALL ' + NAMES[i], get: () => X.CALL[i], set: v => { X.CALL[i] = v; } }, [no('CALL ' + NAMES[i], () => X.CALL[i])],
+    `Call memory for floor ${NAMES[i]}. A button pulse energises CALL ${NAMES[i]}, whose own contact (the lower branch) keeps it on. It is wiped when the car is at floor ${NAMES[i]} with the door fully open (LS2).`);
+sec('DIRECTION LOGIC');
+rung([no('CALL ABOVE', () => X.CALL.some((c, i) => c && i * H - X.pos > 0.039))], coilOf('RA', 'RA'), [], 'Helper relay: true when any stored call is above the car.');
+rung([no('CALL BELOW', () => X.CALL.some((c, i) => c && X.pos - i * H > 0.039))], coilOf('RB', 'RB'), [], 'Helper relay: true when any stored call is below the car.');
+rung([nc('CALL BELOW', key('RB'))], coilOf('PRI_UP', 'PRI_UP'), [no('DIR MEM=UP', () => X.lastUp)],
+  'Up is preferred when nothing is below, or when the car was already travelling up. This is why the car finishes its upward run before reversing.');
+rung([nc('CALL ABOVE', key('RA'))], coilOf('PRI_DN', 'PRI_DN'), [no('DIR MEM=DN', () => !X.lastUp)], 'Mirror of the rung above for the downward direction.');
+rung([no('CALL @ FLOOR', () => X.CALL.some((c, i) => c && X.FS[i]))], coilOf('ARR', 'ARR'), [],
+  'Arrived. A floor sensor sees the car at a floor that has a stored call. This drops the drive contactor and requests the door.');
+rung([no('CALL AHEAD', () => {
+  if (!X.K_BRK) return false; const d = X.K_UP ? 1 : -1;
+  return X.CALL.some((c, i) => { const g = (i * H - X.pos) * d; return c && g >= -0.05 && g <= SLOWD; });
+})], coilOf('SLOW', 'SLOW'), [], 'Slow-down. A called floor is within 1.8 m ahead in the travel direction, so the drive targets 0.3 m/s creep speed for a smooth landing.');
+sec('INTERLOCKS');
+rung([nc('TOP LIMIT', key('TOPLIM')), nc('K_DN', key('K_DN'))], coilOf('UP_OK', 'UP_OK'), [],
+  'Up permit. The top limit switch has not been hit, and the opposite contactor K_DN is off (electrical interlock, so both contactors can never close together).');
+rung([nc('BOTTOM LIM', key('BOTLIM')), nc('K_UP', key('K_UP'))], coilOf('DN_OK', 'DN_OK'), [], 'Down permit, mirror of the rung above.');
+sec('DRIVE');
+rung([no('STANDSTILL', key('STOPPED')), no('K_RUN', key('K_RUN')), no('CALL ABOVE', key('RA')), no('PRI_UP', key('PRI_UP')), nc('ARRIVED', key('ARR')), no('UP_OK', key('UP_OK'))],
+  coilOf('K_UP', 'K_UP'), [no('K_UP', key('K_UP'))],
+  'Up contactor. Needs: car at standstill (or already running, via the seal-in), run permit, a call above, up preference, not arrived, up permit. Closing it connects the motor to the three phases in normal order.');
+rung([no('STANDSTILL', key('STOPPED')), no('K_RUN', key('K_RUN')), no('CALL BELOW', key('RB')), no('PRI_DN', key('PRI_DN')), nc('ARRIVED', key('ARR')), no('DN_OK', key('DN_OK'))],
+  coilOf('K_DN', 'K_DN'), [no('K_DN', key('K_DN'))],
+  'Down contactor. Same conditions mirrored. Its contacts swap two phases to the motor, which reverses it.');
+rung([no('K_UP', key('K_UP'))], coilOf('K_BRK', 'K_BRK'), [no('K_DN', key('K_DN'))],
+  'Brake coil Y1 is energised whenever either contactor is on. The brake is spring-applied, so it holds the car at every other time, including power loss.');
+sec('DOOR');
+rung([no('ARRIVED', key('ARR'))], coilOf('K_REQ', 'K_REQ'), [no('OPEN BTN', key('openBtn')), no('PHOTO-EYE', key('photo')), no('OVERLOAD', key('ovld'))],
+  'Door request. Arrival, the OPEN button, a blocked photo-eye or an overload each ask the door to open or stay open.');
+rung([no('CLOSE BTN', key('closeBtn')), nc('PHOTO-EYE', key('photo')), nc('OVERLOAD', key('ovld')), no('AT FLOOR', key('ATFL'))], coilOf('K_CLS', 'K_CLS'), [],
+  'Close request. The CLOSE button is accepted only when the photo-eye is clear and the car is not overloaded.');
+rung([no('DOOR OPEN', key('LS_DO')), nc('PHOTO-EYE', key('photo')), nc('OVERLOAD', key('ovld')), nc('OPEN BTN', key('openBtn'))],
+  { label: () => 'T1 ' + X.T1acc.toFixed(1) + '/3s', get: () => X.T1done, set: v => { X.T1acc = v ? Math.min(3, X.T1acc + X.dt) : 0; X.T1done = X.T1acc >= 3; } }, [],
+  'Dwell timer. Counts to 3 s only while the door is fully open and nothing blocks, holds or overloads it. Any interruption resets it to zero.');
+rung([no('K_REQ', key('K_REQ')), no('AT FLOOR', key('ATFL')), no('STANDSTILL', key('STOPPED')), nc('T1 DONE', key('T1done')), nc('K_CLS', key('K_CLS'))],
+  coilOf('K_DOP', 'K_DOP'), [no('K_DOP', key('K_DOP'))],
+  'Door-open relay. Sealed in once requested, so it stays on while the door travels. It drops when T1 expires or a valid close request arrives. Only allowed when stopped at a floor.');
+rung([no('AT FLOOR', key('ATFL')), nc('K_DOP', key('K_DOP')), nc('DOOR CLOSED', key('LS_DC'))], coilOf('K_DCL', 'K_DCL'), [],
+  'Door-close relay. Runs the door motor the other way whenever K_DOP is off and the door is not yet fully closed (LS1).');
+
+const contactOn = c => c.t === 'NO' ? !!c.f() : !c.f();
+function evalRung(r) {
+  const c = r.els.map(contactOn), b = r.br.map(contactOn), inP = [];
+  let p = true;
+  for (let k = 0; k < c.length; k++) { inP[k] = p; p = p && (k === 0 ? (c[0] || b.some(Boolean)) : c[k]); }
+  r.res = { c, b, inP, out: p };
+  r.coil.set(p);
+}
+
+/* ---------------- scan cycle ---------------- */
+const logBuf = [];
+// motor model: field angle leads the rotor by a load angle; 4 pole pairs drawn
+const ph = () => { const dl = 0.35 * Math.max(-1, Math.min(1, X.tq / 2500)), thf = X.pos / R + dl; return { dl, thf, the: 4 * thf }; };
+let prev = {};
+const watch = {
+  K_UP: ['K_UP energised: contactor closes, car drives up', 'e', 'K_UP dropped: contactor opens', 'r'],
+  K_DN: ['K_DN energised: contactor closes, car drives down', 'e', 'K_DN dropped: contactor opens', 'r'],
+  K_BRK: ['Y1 energised: brake released', 'g', 'Brake set', 'r'],
+  K_DOP: ['K_DOP: door motor opening', 'e'], K_DCL: ['K_DCL: door motor closing', 'e'],
+  K_SAFE: ['Safety chain closed', 'g', 'Safety chain OPEN: drive disabled', 'r'],
+  SLOW: ['SLOW: creep speed approaching landing', 'e'], T1done: ['T1 expired (3 s): door may close', 'e'],
+  LS_DO: ['LS2 closed: door fully open', 'g'], LS_DC: ['LS1 closed: door fully closed, K_RUN may energise', 'g'],
+  photo: ['Photo-eye beam blocked', 'r', 'Photo-eye beam clear', 'g'], K_CLS: ['Close request accepted (K_CLS)', 'e']
+};
+function scan(dt) {
+  X.dt = dt; X.t += dt; scans++;
+  for (let i = 0; i < N; i++) { X.btn[i] = scans < X.btnUntil[i]; X.FS[i] = Math.abs(X.pos - i * H) < 0.04; }
+  X.openBtn = scans < X.openUntil; X.closeBtn = scans < X.closeUntil;
+  X.ATFL = X.FS.some(Boolean); X.LS_DC = X.door <= 0.0005; X.LS_DO = X.door >= 0.9995;
+  X.TOPLIM = X.pos >= TOP - 0.0005; X.BOTLIM = X.pos <= 0.0005;
+  X.STOPPED = Math.abs(X.v) < 0.005; X.photo = X.userObs && X.door > 0.001;
+  for (const r of rungs) if (!r.sec) evalRung(r);
+  if (X.K_UP) X.lastUp = true; if (X.K_DN) X.lastUp = false;
+  if (X.K_BRK) {
+    const d = X.K_UP ? 1 : -1, tgt = d * (X.SLOW ? VC : VMAX), rate = Math.abs(tgt) < Math.abs(X.v) ? DEC : ACC;
+    X.v += Math.max(-rate * dt, Math.min(rate * dt, tgt - X.v));
+  } else {
+    X.v += Math.max(-8 * dt, Math.min(8 * dt, -X.v));
+    if (Math.abs(X.v) < 0.01 && X.ARR) { X.v = 0; const f = Math.round(X.pos / H); if (Math.abs(X.pos - f * H) < 0.06) X.pos = f * H; }
+  }
+  X.pos = Math.max(0, Math.min(TOP, X.pos + X.v * dt));
+  { // drive model: rope tension difference gives shaft torque; counterweight is 800 kg car + 45% of 630 kg
+    const load = X.ovld ? 650 : 150, mC = 800 + load, mW = 1083, a = (X.v - X.pv) / dt; X.pv = X.v; X.load = load;
+    X.tq = ((mC - mW) * 9.81 + (mC + mW) * a) * R; X.rpm = Math.abs(X.v) / (2 * Math.PI * R) * 60; X.hz = X.rpm * 12 / 60;
+    X.amp = X.K_BRK ? Math.min(1, 0.12 + 0.88 * Math.abs(X.tq) / 2500) : 0; X.pw = X.K_BRK ? X.tq * (X.v / R) / 1000 : 0;
+    if (X.t - lastS >= 1 / 30) { lastS = X.t; const q = ph(); hist.push([X.amp * Math.cos(q.the), X.amp * Math.cos(q.the - 2.0944), X.amp * Math.cos(q.the - 4.1888), X.v, X.tq]); if (hist.length > 200) hist.shift(); }
+  }
+  // door operator: limit switches cut the motor circuit at the ends of travel
+  if (X.K_DOP && !X.LS_DO) X.door = Math.min(1, X.door + dt / DOOR_T); else if (X.K_DCL && !X.LS_DC) X.door = Math.max(0, X.door - dt / DOOR_T);
+  for (const k in watch) { const v = !!X[k], m = watch[k];
+    if (prev[k] !== undefined && v !== prev[k]) { if (v) log(m[0], m[1]); else if (m[2]) log(m[2], m[3]); } prev[k] = v; }
+  for (let i = 0; i < N; i++) { const k = 'C' + i, v = X.CALL[i]; if (prev[k] !== undefined && v !== prev[k]) log(v ? 'Call ' + NAMES[i] + ' latched in memory' : 'Call ' + NAMES[i] + ' served and cleared', v ? 'e' : 'g'); prev[k] = v; }
+}
+function log(msg, cls) { if (msg) logBuf.push([fmtT(X.t), msg, cls || '']); }
+const press = i => { X.btnUntil[i] = scans + 3; };
+const pressOpen = () => { X.openUntil = scans + 3; };
+const pressClose = () => { X.closeUntil = scans + 3; };
+
+/* ---------------- diagram helpers ---------------- */
+const NS = 'http://www.w3.org/2000/svg';
+const mk = (t, a, par) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (par) par.appendChild(e); return e; };
+const ln = (x1, y1, x2, y2, par, cls) => mk('line', { x1, y1, x2, y2, class: cls || '' }, par);
+const setP = (e, on) => e.classList.toggle('p', !!on);
+function symbol(t, cx, y, par, vertical) {
+  const g = mk('g', {}, par);
+  if (vertical) { ln(cx - 8, y - 6, cx + 8, y - 6, g, 'sym'); ln(cx - 8, y + 6, cx + 8, y + 6, g, 'sym'); if (t === 'NC') ln(cx - 8, y - 9, cx + 8, y + 9, g, 'sym'); }
+  else { ln(cx - 6, y - 8, cx - 6, y + 8, g, 'sym'); ln(cx + 6, y - 8, cx + 6, y + 8, g, 'sym'); if (t === 'NC') ln(cx - 9, y + 8, cx + 9, y - 8, g, 'sym'); }
+  return g;
+}
+
+/* ---------------- control ladder drawing ---------------- */
+const RL = 20, RR = 614, P = 76, COILX = 552;
+const svg = $('#lad');
+function build() {
+  let y = 6, n = 0;
+  for (const r of rungs) {
+    if (r.sec) { r.y = y + 14; y += 24; continue; }
+    const nb = r.br.length, y0 = y + 22; r.y = y0; r.n = ++n;
+    mk('text', { x: 2, y: y0 + 3, class: 'rn' }, svg).textContent = String(n).padStart(2, '0');
+    r.g = mk('g', {}, svg); r.items = [];
+    r.els.forEach((c, k) => {
+      const xa = RL + k * P, cx = xa + P / 2, g = mk('g', {}, r.g);
+      const l = ln(xa, y0, cx - 9, y0, g); symbol(c.t, cx, y0, g); const rr = ln(cx + 9, y0, xa + P, y0, g);
+      mk('text', { x: cx, y: y0 - 13, 'text-anchor': 'middle', class: 'lb' }, g).textContent = c.label;
+      r.items.push({ g, l, rr });
+    });
+    r.bitems = r.br.map((c, b) => {
+      const yb = y0 + 30 * (b + 1), cx = RL + P / 2, xb = RL + P, g = mk('g', {}, r.g);
+      const l = ln(RL, yb, cx - 9, yb, g); symbol(c.t, cx, yb, g); const rr = ln(cx + 9, yb, xb, yb, g), rise = ln(xb, yb, xb, y0, g);
+      mk('text', { x: cx, y: yb + 13, 'text-anchor': 'middle', class: 'lb' }, g).textContent = c.label;
+      return { g, l, rr, rise };
+    });
+    r.cw = ln(RL + r.els.length * P, y0, COILX - 10, y0, r.g);
+    r.cg = mk('g', { class: 'coil' }, r.g);
+    mk('circle', { cx: COILX, cy: y0, r: 10 }, r.cg);
+    r.ct = mk('text', { x: COILX, y: y0 - 15, 'text-anchor': 'middle' }, r.cg);
+    r.cr = ln(COILX + 10, y0, RR, y0, r.g);
+    // invisible hit area so a whole rung responds to hover or tap
+    const hit = mk('rect', { x: RL, y: y + 4, width: RR - RL, height: 38 + nb * 30, fill: 'transparent', stroke: 'none' }, r.g);
+    r.g.insertBefore(hit, r.g.firstChild);
+    r.g.addEventListener('pointerover', () => { $('#rnote').innerHTML = `<b>RUNG ${String(r.n).padStart(2, '0')}</b> ${r.note || ''}`; });
+    y += 42 + nb * 30;
+  }
+  const h = y + 6;
+  svg.setAttribute('viewBox', `0 0 ${RR + 20} ${h}`);
+  ln(RL, 0, RL, h, svg, 'rail'); ln(RR, 0, RR, h, svg, 'rail');
+  for (const r of rungs) if (r.sec) mk('text', { x: RL + 8, y: r.y, class: 'sec' }, svg).textContent = r.sec;
+}
+function drawLadder() {
+  for (const r of rungs) {
+    if (r.sec || !r.res) continue;
+    const { c, b, inP, out } = r.res;
+    r.items.forEach((it, k) => { setP(it.l, inP[k]); setP(it.rr, inP[k] && c[k]); it.g.classList.toggle('cl', c[k]); });
+    r.bitems.forEach((it, i) => { setP(it.l, true); setP(it.rr, b[i]); setP(it.rise, b[i]); it.g.classList.toggle('cl', b[i]); });
+    setP(r.cw, out); setP(r.cr, out); r.cg.classList.toggle('on', out);
+    const lab = typeof r.coil.label === 'function' ? r.coil.label() : r.coil.label;
+    if (r.ct.textContent !== lab) r.ct.textContent = lab;
+  }
+}
+build();
+
+/* ---------------- power circuit drawing ---------------- */
+const pwr = $('#pwr'), pw = [];
+const live = () => true, upOn = () => X.K_UP, dnOn = () => X.K_DN, anyOn = () => X.K_UP || X.K_DN;
+const dopI = () => X.K_DOP && !X.LS_DO, dclI = () => X.K_DCL && !X.LS_DC;
+const PL = (x1, y1, x2, y2, fn) => { const l = ln(x1, y1, x2, y2, pwr); pw.push(() => setP(l, fn())); return l; };
+const TX = (x, y, s, anchor, cls) => { const t = mk('text', { x, y, 'text-anchor': anchor || 'middle', class: cls || '' }, pwr); t.textContent = s; return t; };
+const dot = (x, y) => mk('circle', { cx: x, cy: y, r: 2.6, class: 'dot' }, pwr);
+function PS(t, cx, cy, fn, vertical, label, lx, ly) {
+  const g = symbol(t, cx, cy, pwr, vertical); pw.push(() => g.classList.toggle('cl', fn()));
+  if (label) { const tx = TX(lx === undefined ? cx : lx, ly === undefined ? cy - 14 : ly, label, 'middle', 'lb'); pw.push(() => tx.classList.toggle('lb', true)); }
+  return g;
+}
+(function buildPower() {
+  TX(8, 28, 'MAIN SUPPLY 3~ 400 V', 'start', 'sec');
+  const ph = [84, 100, 116], names = ['L1', 'L2', 'L3'];
+  ph.forEach((y, i) => { TX(34, y + 3, names[i], 'end'); PL(40, y, 64, y, live); PL(88, y, i === 2 ? 378 : 450, y, live); PS('NO', 76, y, live, false); });
+  TX(76, 136, 'Q1 breaker');
+  const upX = [160, 184, 208], dnX = [330, 354, 378], dnPh = [2, 1, 0], ty = [250, 262, 274], tx = [262, 274, 286], cy = 170;
+  [[upX, [0, 1, 2], upOn, 'K_UP'], [dnX, dnPh, dnOn, 'K_DN']].forEach(([xs, phs, fn, nm], gi) => {
+    xs.forEach((x, i) => {
+      const py = ph[phs[i]]; dot(x, py); PL(x, py, x, cy - 6, live); PS('NO', x, cy, fn, true);
+      const term = gi === 0 ? i : phs[i] === 2 ? 0 : phs[i] === 1 ? 1 : 2;
+      PL(x, cy + 6, x, ty[term], fn); PL(x, ty[term], tx[term], ty[term], fn);
+    });
+    TX((xs[0] + xs[2]) / 2, cy - 30, nm + ' contactor', 'middle', 'lb');
+    TX((xs[0] + xs[2]) / 2, cy + 28, gi === 0 ? 'phases L1-L2-L3' : 'L1 and L3 swapped');
+  });
+  [0, 1, 2].forEach(i => { PL(tx[i], ty[i], tx[i], 300, anyOn); PL(tx[i], 320, tx[i], 345, anyOn); });
+  const f1 = mk('rect', { x: 248, y: 300, width: 52, height: 20 }, pwr); TX(274, 314, 'F1', 'middle'); TX(306, 314, 'VFD + thermal', 'start');
+  const m1 = mk('circle', { cx: 274, cy: 375, r: 30, class: 'mot' }, pwr); TX(274, 372, 'M1', 'middle', 'big'); TX(274, 386, '3~', 'middle');
+  const rot1 = mk('g', { transform: 'translate(274,375)' }, pwr); mk('circle', { cx: 0, cy: -22, r: 3.5, class: 'rotor' }, rot1);
+  TX(274, 424, 'TRACTION MOTOR → SHEAVE'); const rpm = TX(274, 438, '0 rpm', 'middle', 'lb');
+  // control PSU
+  mk('rect', { x: 450, y: 64, width: 120, height: 56 }, pwr); TX(510, 88, 'T1 PSU', 'middle', 'big'); TX(510, 104, '400 V AC → 24 V DC');
+  PL(490, 120, 490, 140, live); PL(490, 140, 430, 140, live); PL(560, 120, 560, 140, live); PL(560, 140, 700, 140, live);
+  PL(430, 140, 430, 460, live); PL(700, 140, 700, 460, live);
+  TX(700, 134, '+24 V', 'end'); TX(430, 134, '0 V', 'end');
+  // door operator
+  TX(565, 156, 'DOOR OPERATOR (24 V DC, reversible)', 'middle', 'sec');
+  [[180, 'K_DOP', dopI, () => X.K_DOP, 'LS2 (NC)', () => !X.LS_DO, 211], [300, 'K_DCL', dclI, () => X.K_DCL, 'LS1 (NC)', () => !X.LS_DC, 259]].forEach(([y, nm, cur, coil, lsn, lsf, ty2]) => {
+    PL(700, y, 658, y, live); PS('NO', 650, y, coil, false, nm); PL(642, y, 613, y, coil);
+    PS('NC', 605, y, lsf, false, lsn); PL(597, y, 565, y, cur); PL(565, y, 565, ty2, cur);
+  });
+  mk('circle', { cx: 565, cy: 235, r: 24, class: 'mot' }, pwr); TX(565, 239, 'M2', 'middle', 'big');
+  const rot2 = mk('g', { transform: 'translate(565,235)' }, pwr); mk('circle', { cx: 0, cy: -16, r: 3, class: 'rotor' }, rot2);
+  PL(541, 235, 430, 235, () => dopI() || dclI());
+  const dst = TX(600, 238, 'STOPPED', 'start', 'lb');
+  // brake
+  TX(565, 352, 'BRAKE', 'middle', 'sec');
+  PL(700, 370, 658, 370, live); PS('NO', 650, 370, () => X.K_BRK, false, 'K_BRK'); PL(642, 370, 505, 370, () => X.K_BRK); PL(505, 370, 505, 390, () => X.K_BRK);
+  const y1 = mk('g', { class: 'coil' }, pwr); mk('rect', { x: 480, y: 390, width: 50, height: 30 }, y1); mk('text', { x: 505, y: 409, 'text-anchor': 'middle' }, y1).textContent = 'Y1';
+  TX(580, 409, 'spring brake,', 'start'); TX(580, 421, 'coil releases it', 'start');
+  PL(505, 420, 505, 448, () => X.K_BRK); PL(505, 448, 430, 448, () => X.K_BRK);
+  // safety chain strip
+  TX(8, 478, 'SAFETY CHAIN → K_RUN', 'start', 'sec');
+  const chain = [['E-STOP', () => !X.estop], ['OVERLOAD', () => !X.ovld], ['DOOR LOCK LS1', () => X.LS_DC], ['K_SAFE', () => X.K_SAFE], ['K_RUN', () => X.K_RUN]];
+  const nodes = chain.map(([lab, f], k) => {
+    const g = mk('g', { class: 'node' }, pwr), x = 8 + k * 142;
+    mk('rect', { x, y: 490, width: 124, height: 30, rx: 3 }, g); mk('text', { x: x + 62, y: 509, 'text-anchor': 'middle' }, g).textContent = lab;
+    if (k) PL(x - 18, 505, x, 505, () => chain[k - 1][1]());
+    return [g, f];
+  });
+  TX(8, 548, 'Chain open → K_RUN drops → both contactors drop → brake sets.');
+  let a1 = 0, a2 = 0;
+  pw.push(() => {
+    m1.classList.toggle('on', anyOn()); a1 += X.v * X.dt * 0; // angle follows position for exact sync
+    rot1.setAttribute('transform', `translate(274,375) rotate(${(X.pos / R) * 57.3 * 0.5})`);
+    rot2.setAttribute('transform', `translate(565,235) rotate(${X.door * 720})`);
+    rpm.textContent = Math.round(Math.abs(X.v) / (2 * Math.PI * R) * 60) + ' rpm' + (X.K_UP ? ' ▲' : X.K_DN ? ' ▼' : '');
+    dst.textContent = dopI() ? '▶ OPENING' : dclI() ? '◀ CLOSING' : X.K_DOP && X.LS_DO ? 'LS2 CUT OFF' : 'STOPPED';
+    y1.classList.toggle('on', X.K_BRK);
+    pwr.querySelectorAll('.mot').forEach((e, i) => { if (i === 1) e.classList.toggle('on', dopI() || dclI()); });
+    nodes.forEach(([g, f]) => { const ok = f(); g.classList.toggle('ok', ok); g.classList.toggle('bad', !ok); });
+  });
+})();
+function drawPower() { for (const f of pw) f(); }
+
+/* ---------------- inputs / outputs tab ---------------- */
+const ioDefs = [
+  ['Operator inputs', [['E-STOP', () => X.estop, 1], ['OVERLOAD', () => X.ovld, 1], ['OPEN BTN', () => X.openBtn], ['CLOSE BTN', () => X.closeBtn], ...NAMES.map((n, i) => ['BTN ' + n, () => X.btn[i]])]],
+  ['Sensors and limit switches', [['PHOTO-EYE BLOCKED', () => X.photo, 1], ['LS1 DOOR CLOSED', () => X.LS_DC], ['LS2 DOOR OPEN', () => X.LS_DO], ['STANDSTILL', () => X.STOPPED], ['TOP LIMIT', () => X.TOPLIM], ['BOTTOM LIMIT', () => X.BOTLIM], ...NAMES.map((n, i) => ['FLOOR SENSOR ' + n, () => X.FS[i]])]],
+  ['Stored calls', NAMES.map((n, i) => ['CALL ' + n, () => X.CALL[i]])],
+  ['Relays and outputs', ['K_SAFE', 'K_RUN', 'K_UP', 'K_DN', 'K_BRK', 'K_REQ', 'K_CLS', 'K_DOP', 'K_DCL', 'SLOW', 'ARR', 'RA', 'RB', 'PRI_UP', 'PRI_DN', 'UP_OK', 'DN_OK', 'T1done'].map(k => [k === 'T1done' ? 'T1 DONE' : k, () => X[k]])]
+];
+const ioChips = [];
+(function buildIO() {
+  const root = $('#iop');
+  root.innerHTML = `<div class="tele"><div><span>Position</span><b id="tPos"></b></div><div><span>Speed</span><b id="tVel"></b></div><div><span>Door</span><b id="tDoor"></b></div><div><span>Timer T1</span><b id="tT1"></b></div></div>`;
+  for (const [title, items] of ioDefs) {
+    const h = document.createElement('h4'); h.textContent = title; root.appendChild(h);
+    const g = document.createElement('div'); g.className = 'io'; root.appendChild(g);
+    for (const [lab, fn, warn] of items) { const d = document.createElement('div'); d.className = 'chip' + (warn ? ' w' : ''); d.innerHTML = '<i></i><span></span>'; d.lastChild.textContent = lab; g.appendChild(d); ioChips.push([d, fn]); }
+  }
+})();
+function drawIO() {
+  for (const [d, f] of ioChips) d.classList.toggle('on', !!f());
+  $('#tPos').textContent = X.pos.toFixed(2) + ' m'; $('#tVel').textContent = Math.abs(X.v).toFixed(2) + ' m/s';
+  $('#tDoor').textContent = Math.round(X.door * 100) + '%'; $('#tT1').textContent = X.T1acc.toFixed(1) + ' / 3 s';
+}
+
+/* plain-English explanation of the current state */
+function explain() {
+  const p = [], calls = NAMES.filter((n, i) => X.CALL[i]), fl = NAMES[Math.round(X.pos / H)], vs = Math.abs(X.v).toFixed(2);
+  if (!X.K_SAFE) p.push(`<b>Drive locked.</b> The safety chain is open (${X.estop ? 'E-STOP pressed' : X.ovld ? 'overload sensor tripped' : 'starting up'}), so K_SAFE and K_RUN are off, both contactors are off and the brake is set.`);
+  if (X.K_UP || X.K_DN) {
+    p.push(`<b>Moving ${X.K_UP ? 'up' : 'down'} at ${vs} m/s.</b> ${X.K_UP ? 'K_UP' : 'K_DN'} closed its three power contacts${X.K_DN ? ' (two phases swapped)' : ''} and K_BRK energised brake coil Y1, which releases the brake.`);
+    p.push(X.SLOW ? `<b>SLOW</b> is on: a called floor is within ${SLOWD} m ahead, so the drive holds 0.3 m/s creep for a smooth landing.` : `Cruising at full speed. ARR will drop the contactor when the floor sensor sees a called floor.`);
+  } else if (X.K_DOP && !X.LS_DO) p.push(`<b>Door opening.</b> Current flows +24 V → K_DOP → LS2 (NC) → M2. LS2 is still closed, so M2 keeps driving the doors.`);
+  else if (X.K_DCL && !X.LS_DC) p.push(`<b>Door closing.</b> K_DCL drives M2 the other way through LS1. Blocking the photo-eye would energise K_REQ and reverse it.`);
+  else if (X.LS_DO) p.push(X.ovld ? `<b>Door held open by overload.</b> OVERLOAD feeds K_REQ and freezes timer T1 at ${X.T1acc.toFixed(1)} s.` : X.photo ? `<b>Door held open by the photo-eye.</b> T1 is reset while the beam is blocked.` : X.openBtn ? `<b>Door held by the OPEN button.</b>` :
+    `<b>Door fully open.</b> LS2 cut M2's circuit, so the motor is stopped. T1 is counting: ${X.T1acc.toFixed(1)} of 3 s. K_RUN is off, so the car cannot move.`);
+  else if (X.K_SAFE) p.push(`<b>Idle at floor ${fl}, doors closed.</b> ${calls.length ? 'Stored calls: ' + calls.join(', ') + '.' : 'No calls stored. Press a floor button.'}`);
+  if (calls.length && (X.K_UP || X.K_DN)) p.push(`<span class="m">Stored calls: ${calls.join(', ')}. Direction memory: ${X.lastUp ? 'up' : 'down'}.</span>`);
+  return p.map(s => `<p>${s}</p>`).join('');
+}
+
+/* ---------------- 3D scene ---------------- */
+const canvas = $('#view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f14);
+scene.fog = new THREE.Fog(0x0b0f14, 45, 90);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+scene.add(new THREE.HemisphereLight(0xa9bdd6, 0x1b222b, 0.95));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(8, 22, 14); scene.add(sun);
+const carLight = new THREE.PointLight(0xfff0cc, 0.9, 9);
+
+const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.25 }, o));
+const mats = {
+  steel: M(0x8794a6, { metalness: 0.7, roughness: 0.4 }), dark: M(0x333c48), wall: M(0xc7ced8, { roughness: 0.8, metalness: 0.05 }),
+  slab: M(0x59636f, { roughness: 0.9 }), door: M(0xb9c3cf, { metalness: 0.6, roughness: 0.35 }),
+  glass: M(0x8fc2e8, { transparent: true, opacity: 0.12, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
+  glassCar: M(0x9fd0f0, { transparent: true, opacity: 0.22, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
+  amber: M(0xffb23e, { emissive: 0xffa020, emissiveIntensity: 0.9 }), cw: M(0x4a525d, { roughness: 0.9, metalness: 0.3 })
+};
+const box = (w, h, d, m, x, y, z, par) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); (par || scene).add(o); return o; };
+const YS = TOP + 4.1;
+
+box(2.8, 0.25, 3.0, mats.slab, 0, -0.6, -0.12);
+box(2.6, 0.75, 0.04, mats.glass, 0, -0.38, -1.5); box(0.04, 0.75, 2.75, mats.glass, -1.3, -0.38, -0.125); box(0.04, 0.75, 2.75, mats.glass, 1.3, -0.38, -0.125); box(2.6, 0.75, 0.04, mats.glass, 0, -0.38, 1.25);
+const bufs = [[-0.45, 0.35], [0.45, 0.35], [0, -1.3]].map(([x, z]) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.36, 16), M(0xc2452d, { metalness: 0.4 })); b.position.set(x, -0.3, z); scene.add(b); return b; });
+for (const sx of [-1.3, 1.3]) for (const sz of [1.25, -1.5]) box(0.12, 18.2, 0.12, mats.dark, sx, 8.9, sz);
+box(2.6, 17.6, 0.04, mats.glass, 0, 8.8, -1.5); box(0.04, 17.6, 2.75, mats.glass, -1.3, 8.8, -0.125); box(0.04, 17.6, 2.75, mats.glass, 1.3, 8.8, -0.125);
+const rails = [-0.9, 0.9].map(sx => box(0.06, 17.2, 0.1, mats.steel, sx, 8.6, 0));
+for (const sx of [-0.45, 0.45]) box(0.05, 17.2, 0.08, mats.steel, sx, 8.6, -1.3);
+box(2.8, 0.2, 3.0, M(0x55606c, { transparent: true, opacity: 0.55 }), 0, YS - 1.1, -0.12);
+const roomBox = box(2.8, 2.6, 3.0, mats.glass, 0, YS + 0.3, -0.12);
+
+const lamps = [], btnPanels = [], landL = [], landR = [], sensors = [];
+function label(txt, w) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#05080b'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#ffb23e'; g.font = '700 84px "Chakra Petch",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 64, 70);
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+}
+for (let i = 0; i < N; i++) {
+  const y = i * H;
+  box(5.5, 0.2, 3.6, mats.slab, 0, y - 0.1, 3.05);
+  box(0.75, H - 0.05, 0.15, mats.wall, -0.925, y + H / 2 - 0.02, 1.25); box(0.75, H - 0.05, 0.15, mats.wall, 0.925, y + H / 2 - 0.02, 1.25);
+  box(1.1, H - 2.15, 0.15, mats.wall, 0, y + 2.15 + (H - 2.15) / 2 - 0.02, 1.25);
+  box(1.2, 0.06, 0.2, mats.dark, 0, y + 2.16, 1.3);
+  landL.push(box(0.55, 2.1, 0.05, mats.door, -0.275, y + 1.05, 1.36)); landR.push(box(0.55, 2.1, 0.05, mats.door, 0.275, y + 1.05, 1.36));
+  const lab = label(NAMES[i], 0.42); lab.position.set(0, y + 2.62, 1.34); scene.add(lab);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), M(0x224433, { emissive: 0x000000 })); lamp.position.set(0.5, y + 2.62, 1.36); scene.add(lamp); lamps.push(lamp);
+  btnPanels.push(box(0.12, 0.2, 0.05, M(0x2b333c, { emissive: 0x000000 }), 1.05, y + 1.1, 1.36));
+  sensors.push(box(0.1, 0.1, 0.06, M(0x2b333c, { emissive: 0x000000 }), -1.05, y + 1.3, 0.5));
+}
+const gnd = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), M(0x10151b, { roughness: 1, metalness: 0 })); gnd.rotation.x = -Math.PI / 2; gnd.position.y = -0.72; scene.add(gnd);
+
+const car = new THREE.Group(); scene.add(car);
+box(1.6, 0.08, 1.9, mats.slab, 0, 0.04, 0, car); box(1.6, 0.08, 1.9, mats.dark, 0, 2.36, 0, car);
+box(1.2, 0.03, 0.4, new THREE.MeshBasicMaterial({ color: 0xfff1cf }), 0, 2.31, 0, car);
+box(1.6, 2.4, 0.06, M(0xd6dce4, { roughness: 0.7 }), 0, 1.2, -0.92, car);
+box(0.05, 2.4, 1.9, mats.glassCar, -0.78, 1.2, 0, car); box(0.05, 2.4, 1.9, mats.glassCar, 0.78, 1.2, 0, car);
+box(0.25, 2.3, 0.06, mats.steel, -0.675, 1.2, 0.95, car); box(0.25, 2.3, 0.06, mats.steel, 0.675, 1.2, 0.95, car); box(1.6, 0.3, 0.06, mats.steel, 0, 2.2, 0.95, car);
+const cdL = box(0.55, 2.1, 0.04, mats.door, -0.275, 1.1, 0.96, car), cdR = box(0.55, 2.1, 0.04, mats.door, 0.275, 1.1, 0.96, car);
+box(0.9, 0.06, 0.06, mats.steel, 0, 2.43, 0, car);
+// door operator on the car roof, its pulley turns with the doors
+box(1.3, 0.14, 0.25, M(0x2f4a63, { metalness: 0.5 }), 0, 2.52, 0.8, car);
+const pulley = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16), mats.amber); pulley.rotation.x = Math.PI / 2; pulley.position.set(0, 2.52, 0.95); car.add(pulley);
+const spoke = box(0.22, 0.03, 0.09, mats.dark, 0, 0, 0, pulley); spoke.position.set(0, 0, 0);
+// photo-eye emitters and beam, plus a hand that blocks it
+const eyeM = new THREE.MeshBasicMaterial({ color: 0xff4433 });
+box(0.05, 0.05, 0.05, eyeM, -0.57, 0.8, 1.0, car); box(0.05, 0.05, 0.05, eyeM, 0.57, 0.8, 1.0, car);
+const beam = box(1.08, 0.015, 0.015, eyeM, 0, 0.8, 1.0, car);
+const hand = box(0.22, 1.0, 0.12, M(0xe0764a, { emissive: 0x552200 }), 0.12, 0.85, 1.0, car); hand.visible = false;
+carLight.position.set(0, 2.0, 0); car.add(carLight);
+const vane = box(0.28, 0.5, 0.03, mats.amber, -0.9, 1.3, 0.5, car);
+const sgears = [-0.86, 0.86].map(x => box(0.12, 0.22, 0.22, M(0xff7a2a), x, -0.1, 0, car));
+const people = [], cols = [0x4aa3df, 0xe0764a, 0x7bc47f, 0xd4a5e8, 0xe8d36a, 0xc2c9d1];
+for (let k = 0; k < 6; k++) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 1.05, 14), M(cols[k])); b.position.y = 0.62; g.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), M(0xe6c3a3, { metalness: 0 })); h.position.y = 1.32; g.add(h);
+  g.position.set(((k % 3) - 1) * 0.42, 0.08, -0.45 + Math.floor(k / 3) * 0.5); car.add(g); people.push(g);
+}
+const cw = box(0.7, 2.2, 0.2, mats.cw, 0, 0, -1.3);
+const ropeG = new THREE.CylinderGeometry(0.018, 0.018, 1, 6), ropeM = M(0x222a33, { metalness: 0.5 });
+const ropesCar = [], ropesCw = [];
+for (const rx of [-0.12, 0, 0.12]) for (const [arr, z] of [[ropesCar, 0], [ropesCw, -1.3]]) { const r = new THREE.Mesh(ropeG, ropeM); r.position.x = rx; r.position.z = z; scene.add(r); arr.push(r); }
+const sheave = new THREE.Group(); sheave.position.set(0, YS, -0.65); scene.add(sheave);
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.4, 40), mats.steel); disc.rotation.z = Math.PI / 2; sheave.add(disc);
+for (let k = 0; k < 3; k++) { const sp = box(0.46, 1.1, 0.07, mats.amber, 0, 0, 0, sheave); sp.rotation.x = k * Math.PI / 3; }
+// gearless motor, cut away: glass stator with 12 coils and a magnet rotor spinning inside
+box(1.9, 0.12, 1.2, mats.dark, 0.5, YS - 0.9, -0.65);
+const motorG = new THREE.Group(); motorG.position.set(0.5, YS, -0.65); scene.add(motorG);
+const stator = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.44, 36, 1, true), M(0x6f8aa6, { transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })); stator.rotation.z = Math.PI / 2; motorG.add(stator);
+const ring = (n, r, build) => { for (let j = 0; j < n; j++) { const a = j * Math.PI * 2 / n, o = build(j); o.position.set(0, r * Math.cos(a), r * Math.sin(a)); o.rotation.x = a; } };
+const coilMats = [];
+ring(12, 0.55, () => { const m = M(0xb8651b, { emissive: 0x000000 }); coilMats.push(m); return box(0.36, 0.16, 0.14, m, 0, 0, 0, motorG); });
+const rotor = new THREE.Group(); motorG.add(rotor);
+const hubM = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.38, 28), mats.dark); hubM.rotation.z = Math.PI / 2; rotor.add(hubM);
+ring(8, 0.4, j => box(0.34, 0.09, 0.22, M(j % 2 ? 0x2f6fd6 : 0xd6493b, { emissive: j % 2 ? 0x0a1a40 : 0x400a0a }), 0, 0, 0, rotor));
+const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.3, 12), mats.steel); shaft.rotation.z = Math.PI / 2; shaft.position.x = 0.1; rotor.add(shaft);
+// spring-applied drum brake: shoes clamp the drum, coil Y1 pulls them away
+const brakeG = new THREE.Group(); brakeG.position.set(1.05, YS, -0.65); scene.add(brakeG);
+const drumSpin = new THREE.Group(); brakeG.add(drumSpin);
+const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.2, 32), mats.steel); drum.rotation.z = Math.PI / 2; drumSpin.add(drum);
+box(0.24, 0.05, 0.5, mats.amber, 0, 0, 0, drumSpin);
+const shoeL = box(0.18, 0.5, 0.1, M(0x2a2f36), 0, 0, -0.41, brakeG), shoeR = box(0.18, 0.5, 0.1, M(0x2a2f36), 0, 0, 0.41, brakeG);
+const brakeLamp = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), M(0x552222, { emissive: 0xff3322, emissiveIntensity: 0.9 })); brakeLamp.position.set(0, 0.6, 0); brakeG.add(brakeLamp);
+// overspeed governor wheel and controller cabinet
+const govG = new THREE.Group(); govG.position.set(-0.9, YS - 0.62, -1.0); scene.add(govG);
+box(0.2, 0.3, 0.4, mats.dark, 0, -0.25, 0, govG);
+const govSpin = new THREE.Group(); govG.add(govSpin);
+const govW = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 28), mats.steel); govW.rotation.z = Math.PI / 2; govSpin.add(govW);
+for (let k = 0; k < 2; k++) { const sp = box(0.14, 0.58, 0.05, mats.amber, 0, 0, 0, govSpin); sp.rotation.x = k * Math.PI / 2; }
+const cab = box(0.5, 1.5, 0.5, M(0x3a4552, { metalness: 0.3 }), -1.0, YS - 0.25, 0.9);
+const cabLamps = ['K_SAFE', 'K_RUN', 'K_UP', 'K_DN', 'K_BRK', 'K_DOP', 'K_DCL', 'K_REQ'].map((k, n) => {
+  const m = M(0x14301f, { emissive: 0x000000 }), s = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), m);
+  s.position.set(-1.0 + ((n % 4) - 1.5) * 0.11, YS + 0.15 + Math.floor(n / 4) * 0.13, 1.16); scene.add(s); return [m, k]; });
+
+// orbit camera
+let az = 0.5, el = 0.2, dist = 29, camMode = 'overview', camAnim = null, focus = null, brkVis = 0;
+const tgt = new THREE.Vector3(0, 8.3, 0), goal = { d: 29, z: 0 };
+canvas.addEventListener('pointerdown', e => { camAnim = null; canvas.setPointerCapture(e.pointerId); canvas._l = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointermove', e => { if (!canvas._l) return; az -= (e.clientX - canvas._l[0]) * 0.008; el = Math.max(-0.2, Math.min(1.2, el + (e.clientY - canvas._l[1]) * 0.006)); canvas._l = [e.clientX, e.clientY]; });
+const endDrag = () => { canvas._l = null; }; canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', e => { e.preventDefault(); goal.d = Math.max(3, Math.min(60, goal.d * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+const camPresets = { overview: { d: 29, az: 0.5, el: 0.2 }, follow: { d: 9, az: 0.5, el: 0.2 }, doors: { d: 5.2, az: 0.35, el: 0.1 }, machine: { d: 7, az: 0.75, el: 0.2 } };
+function setCam(m) {
+  camMode = m; focus = null; document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.cam === m));
+  const c = camPresets[m]; goal.d = c.d; camAnim = { az: c.az, el: c.el };
+}
+document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam));
+let rw = 0, rh = 0;
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h && (w !== rw || h !== rh)) { rw = w; rh = h; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); } }
+
+function update3D(t) {
+  const open = X.door;
+  car.position.y = X.pos; cdL.position.x = -0.275 - 0.5 * open; cdR.position.x = 0.275 + 0.5 * open;
+  pulley.rotation.y = open * 8;
+  for (let i = 0; i < N; i++) {
+    const o = Math.abs(X.pos - i * H) < 0.15 ? open : 0;
+    landL[i].position.x = -0.275 - 0.5 * o; landR[i].position.x = 0.275 + 0.5 * o;
+    lamps[i].material.emissive.setHex(Math.abs(X.pos - i * H) < 0.6 ? 0x33ff99 : 0x000000);
+    btnPanels[i].material.emissive.setHex(X.CALL[i] ? 0xffaa22 : 0x000000);
+  }
+  const showEye = X.door > 0.001 || X.userObs;
+  beam.visible = showEye; hand.visible = X.userObs && X.door > 0.05;
+  eyeM.color.setHex(X.photo ? 0xffd23a : 0xff4433); beam.scale.y = X.photo ? 3 : 1; beam.scale.z = X.photo ? 3 : 1;
+  const cwTop = 2.4 + TOP - X.pos; cw.position.y = cwTop - 1.1;
+  const l1 = YS - (X.pos + 2.43), l2 = YS - cwTop;
+  ropesCar.forEach(r => { r.scale.y = Math.max(0.01, l1); r.position.y = X.pos + 2.43 + l1 / 2; });
+  ropesCw.forEach(r => { r.scale.y = Math.max(0.01, l2); r.position.y = cwTop + l2 / 2; });
+  sheave.rotation.x = X.pos / R;
+  brakeLamp.material.emissive.setHex(X.K_BRK ? 0x22ff88 : 0xff3322); brakeLamp.material.color.setHex(X.K_BRK ? 0x225533 : 0x552222);
+  people.forEach((p, k) => p.visible = X.ovld ? true : k < 2);
+  const q = ph(); brkVis += ((X.K_BRK ? 1 : 0) - brkVis) * 0.2;
+  rotor.rotation.x = X.pos / R; drumSpin.rotation.x = X.pos / R; govSpin.rotation.x = X.pos / 0.3;
+  shoeL.position.z = -(0.41 + 0.07 * brkVis); shoeR.position.z = 0.41 + 0.07 * brkVis;
+  coilMats.forEach((m, k) => { const i = X.amp * Math.cos(q.the - 2 * Math.PI * k / 3); m.emissive.setHex([0xffb23e, 0x4aa3df, 0xc58cf0][k % 3]); m.emissiveIntensity = Math.abs(i) * 1.2; });
+  cabLamps.forEach(([m, k]) => m.emissive.setHex(X[k] ? 0x33ff99 : 0x000000));
+  sensors.forEach((s, i) => s.material.emissive.setHex(X.FS[i] ? 0x33ff99 : 0x000000));
+}
+function updateCam(dt) {
+  let gx = 0, gy = 8.3, gz = 0;
+  if (camMode === 'follow') gy = X.pos + 1.3; else if (camMode === 'doors') { gy = X.pos + 1.1; gz = 1; } else if (camMode === 'machine') { gx = 0.5; gy = YS - 0.2; gz = -0.5; }
+  else if (camMode === 'part' && focus) { const v = focus.t(); gx = v.x; gy = v.y; gz = v.z; }
+  const f = 1 - Math.pow(0.001, dt);
+  tgt.x += (gx - tgt.x) * f; tgt.y += (gy - tgt.y) * f; tgt.z += (gz - tgt.z) * f;
+  if ((explainOn || tourT) && camMode === 'part' && focus && !canvas._l) {   // slow orbit and dolly while a part is explained
+    const tt = (performance.now() - partT0) / 1000;
+    if (camAnim) { camAnim.az += [0.12, -0.12, 0.06][partK] * dt; camAnim.el = Math.min(0.5, camAnim.el + (partK === 1 ? 0.03 : 0) * dt); }
+    goal.d = focus.d * (1 - [0.22, 0.12, 0.3][partK] * Math.min(1, tt / 4));
+  }
+  if (camAnim) { az += (camAnim.az - az) * f; el += (camAnim.el - el) * f; }
+  dist += (goal.d * (camMode === 'overview' ? Math.max(1, 1.15 / camera.aspect) : 1) - dist) * f;
+  camera.position.set(tgt.x + dist * Math.sin(az) * Math.cos(el), tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(az) * Math.cos(el));
+  camera.lookAt(tgt);
+}
+
+/* ---------------- explain-the-lift parts ---------------- */
+const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const wp = (o, dx = 0, dy = 0, dz = 0) => { const v = new THREE.Vector3(); o.getWorldPosition(v); return v.add(v3(dx, dy, dz)); };
+const nf = () => Math.max(0, Math.min(N - 1, Math.round(X.pos / H)));
+const other = () => nf() === N - 1 ? nf() - 1 : nf() + 1;
+const parts = [
+  { id: 'room', name: 'Machine room', t: () => v3(-1.1, YS + 1.3, 0.2), hl: () => [roomBox], cam: { t: () => v3(0.2, YS - 0.2, -0.3), d: 9, az: 0.7, el: 0.25 },
+    role: 'The room on top of the shaft that holds everything which makes the car move.',
+    how: 'The motor, brake, controller and governor live here, away from passengers. The glass walls are for the demo; a real machine room is fire-rated, locked and kept dry.',
+    live: () => X.K_RUN ? 'Drive enabled (K_RUN on)' : 'Drive disabled (K_RUN off)' },
+  { id: 'motor', name: 'Traction motor', t: () => wp(motorG, 0, 0.75, 0), hl: () => [motorG], link: ['circuit', 'motor', 'Open the motor simulation'], cam: { t: () => wp(motorG), d: 4.5, az: 0.9, el: 0.2 },
+    role: 'A gearless permanent-magnet motor that turns the sheave directly.',
+    how: 'A drive feeds three-phase current into 12 stator coils. Their rotating magnetic field drags the magnet rotor round, so shaft speed follows the drive frequency and torque follows current. In the cutaway the coils light up in sequence (amber, blue, violet are the three phases).',
+    live: () => `${X.rpm.toFixed(1)} rpm · ${X.hz.toFixed(1)} Hz · ${Math.round(Math.abs(X.tq))} N·m` },
+  { id: 'sheave', name: 'Traction sheave', t: () => wp(sheave, -0.1, 0.75, 0), hl: () => [sheave], cam: { t: () => wp(sheave), d: 4.5, az: 0.8, el: 0.15 },
+    role: 'A grooved wheel that grips the ropes by friction instead of winding them on a drum.',
+    how: 'With no drum, the same ropes serve any height, and if the car ever sits on its buffer the ropes slip instead of overloading the machine. Rope travel equals car travel, so sheave angle = distance ÷ radius (0.65 m).',
+    live: () => `Angle ${Math.round((X.pos / R * 57.2958) % 360)}° · ${X.pos.toFixed(2)} m of rope moved` },
+  { id: 'brake', name: 'Brake (Y1)', t: () => wp(brakeG, 0, 0.8, 0), hl: () => [brakeG], link: ['circuit', 'motor', 'Open the brake simulation'], cam: { t: () => wp(brakeG), d: 3.8, az: 0.9, el: 0.2 },
+    role: 'A spring-applied drum brake on the motor shaft.',
+    how: 'Springs clamp two shoes on the drum, so the car is held by default, even with no power. When K_BRK energises coil Y1 the shoes are pulled away. Losing power or opening the safety chain sets the brake again.',
+    live: () => X.K_BRK ? 'RELEASED (Y1 energised, shoes open)' : 'SET (springs clamp the drum)' },
+  { id: 'ctrl', name: 'Controller cabinet', t: () => wp(cab, 0, 0.95, 0.3), hl: () => [cab], link: ['circuit', 'ladder', 'Open the control ladder'], cam: { t: () => wp(cab, 0, 0.3, 0), d: 4.5, az: 0.3, el: 0.12 },
+    role: 'The cabinet holding the relay logic and the motor drive.',
+    how: 'The ladder diagram runs here. The eight lamps on the front mirror key relays: SAFE, RUN, UP, DOWN (top row), then BRAKE, DOOR OPEN, DOOR CLOSE and DOOR REQUEST.',
+    live: () => { const on = ['K_SAFE', 'K_RUN', 'K_UP', 'K_DN', 'K_BRK', 'K_DOP', 'K_DCL', 'K_REQ'].filter(k => X[k]); return on.length ? 'On: ' + on.join(', ') : 'No output relays on'; } },
+  { id: 'gov', name: 'Overspeed governor', t: () => wp(govG, 0, 0.55, 0), hl: () => [govG], cam: { t: () => wp(govG), d: 4, az: 0.7, el: 0.2 },
+    role: 'A speed watchdog that works independently of the controller.',
+    how: 'A rope loop runs from the car over this wheel and back down, so the wheel turns whenever the car moves. Flyweights swing outward with speed; at about 115% of rated speed they trip a jaw that grips the rope and pulls the safety gear.',
+    live: () => `Car speed ${Math.abs(X.v).toFixed(2)} m/s · trips at 2.76 m/s` },
+  { id: 'ropes', name: 'Hoist ropes', t: () => v3(0.2, (YS + X.pos + 2.43) / 2, 0), hl: () => [...ropesCar, ...ropesCw], cam: { t: () => v3(0, YS - 2, -0.6), d: 9, az: 0.6, el: 0.15 },
+    role: 'Steel ropes that carry the car on one side and the counterweight on the other.',
+    how: 'Several ropes share the load and any one of them could hold the car. The difference in tension between the car side and the counterweight side is what the motor has to resist.',
+    live: () => `Car-side length ${(YS - X.pos - 2.43).toFixed(1)} m · counterweight side ${(2.4 + TOP - X.pos > 0 ? YS - (2.4 + TOP - X.pos) : 0).toFixed(1)} m` },
+  { id: 'cw', name: 'Counterweight', t: () => wp(cw, 0.2, 1.3, 0), hl: () => [cw], cam: { t: () => wp(cw), d: 7, az: 0.8, el: 0.15 },
+    role: 'A steel block equal to the car plus about 45% of its rated load.',
+    how: 'It hangs on the other side of the sheave, so the motor only lifts the difference, not the whole car. A car carrying about 45% load is perfectly balanced. A light car going up lets the counterweight pull, and the motor then acts as a generator.',
+    live: () => `Imbalance ${X.load + 800 - 1083} kg (car minus counterweight) · ${X.pw.toFixed(1)} kW ${X.pw > 0.05 ? 'motoring' : X.pw < -0.05 ? 'regenerating' : ''}` },
+  { id: 'car', name: 'Car (cabin)', t: () => v3(0.55, X.pos + 2.0, 0.4), hl: () => [car], cam: { t: () => v3(0, X.pos + 1.2, 0), d: 7.5, az: 0.6, el: 0.15 },
+    role: 'The cabin: a steel frame with floor, walls, roof and the door operator on top.',
+    how: 'It rides on the guide rails and a load cell in the floor weighs the passengers. Over 630 kg trips the overload input, which opens the safety chain.',
+    live: () => `Load ${X.load} kg · at ${NAMES[nf()]}` },
+  { id: 'cardoor', name: 'Car door and operator', t: () => v3(0.0, X.pos + 2.3, 1.1), hl: () => [cdL, cdR, pulley], link: ['circuit', 'power', 'See the door motor circuit'], cam: { t: () => v3(0, X.pos + 1.2, 1), d: 5, az: 0.3, el: 0.1 },
+    role: 'Two sliding panels moved by a small DC motor on the car roof.',
+    how: 'The motor drives a belt that slides the panels together. A cam on the car door unlocks the landing door only when the two are aligned. Limit switches LS1 and LS2 cut the motor at the ends of travel.',
+    live: () => `${Math.round(X.door * 100)}% open · ${X.K_DOP && !X.LS_DO ? 'opening' : X.K_DCL && !X.LS_DC ? 'closing' : X.LS_DO ? 'fully open (LS2)' : 'closed (LS1)'}` },
+  { id: 'eye', name: 'Photo-eye', t: () => v3(0.57, X.pos + 0.8, 1.0), hl: () => [beam], cam: { t: () => v3(0, X.pos + 0.9, 1), d: 4.2, az: 0.3, el: 0.1 },
+    role: 'A light beam across the doorway.',
+    how: 'If a passenger breaks the beam while the door is closing, the controller treats it as a door request and reopens. In the demo the beam turns yellow when blocked. Use "Block door eye" to try it.',
+    live: () => X.photo ? 'BLOCKED: door held open, T1 reset' : 'Beam clear' },
+  { id: 'landing', name: 'Landing door', t: () => v3(0, other() * H + 2.0, 1.45), hl: () => [landL[other()], landR[other()]], cam: { t: () => v3(0, other() * H + 1.2, 1.3), d: 5.5, az: 0.4, el: 0.1 },
+    role: 'The door on each floor.',
+    how: 'Landing doors stay locked, and the lock is part of the safety chain, unless the car is in the door zone. They open only because the car door drags them along.',
+    live: () => `Floor ${NAMES[other()]} door: closed and locked` },
+  { id: 'hall', name: 'Hall button and lamp', t: () => v3(1.05, 2 * H + 1.5, 1.4), hl: () => [btnPanels[2], lamps[2]], cam: { t: () => v3(0.6, 2 * H + 1.4, 1.4), d: 3.6, az: 0.3, el: 0.05 },
+    role: 'The call button and arrival lamp on every landing.',
+    how: 'Pressing the button pulses the BTN contact of that floor\'s CALL relay. The button glows while the call is stored. The green lamp lights when the car is within the door zone.',
+    live: () => `Call ${NAMES[2]}: ${X.CALL[2] ? 'stored' : 'empty'}` },
+  { id: 'rails', name: 'Guide rails', t: () => v3(0.9, 7.0, 0.25), hl: () => rails, cam: { t: () => v3(0.9, X.pos + 1, 0), d: 5, az: 0.7, el: 0.1 },
+    role: 'T-shaped steel rails running the full height of the shaft.',
+    how: 'Guide shoes on the car slide along them to keep the car on its line. They also take the load when the safety gear grips.',
+    live: () => `Car at ${X.pos.toFixed(2)} m` },
+  { id: 'sgear', name: 'Safety gear', t: () => v3(0.95, X.pos - 0.1, 0.2), hl: () => sgears, cam: { t: () => v3(0.8, X.pos, 0), d: 3.2, az: 0.9, el: 0.05 },
+    role: 'Emergency clamps under the car.',
+    how: 'Steel wedges that bite into the guide rails. The governor rope pulls them when it trips, stopping the car mechanically even if the ropes broke.',
+    live: () => 'Armed, not tripped' },
+  { id: 'sensor', name: 'Floor sensor and vane', t: () => v3(-1.1, nf() * H + 1.7, 0.5), hl: () => [sensors[nf()], vane], cam: { t: () => v3(-1.0, nf() * H + 1.3, 0.5), d: 3.4, az: -0.5, el: 0.05 },
+    role: 'A steel vane on the car passes a sensor at every floor.',
+    how: 'When the vane is within 4 cm of the landing, the sensor lights its input (FS). That tells the controller the car is levelled, which closes ARR and starts the door cycle.',
+    live: () => X.FS[nf()] ? `Vane aligned with floor ${NAMES[nf()]}` : 'Between floors' },
+  { id: 'buffer', name: 'Pit buffers', t: () => v3(0.45, 0.1, 0.55), hl: () => bufs, cam: { t: () => v3(0, -0.3, 0), d: 5.5, az: 0.5, el: 0.25 },
+    role: 'Spring buffers in the pit.',
+    how: 'They cushion the car or counterweight if everything else fails. In normal service they are never touched.',
+    live: () => `Car is ${X.pos.toFixed(2)} m above the buffers` }
+];
+const talks = {
+  room: "Welcome to the machine room, the lift's control centre, perched right on top of the shaft! Everything that makes the car move lives up here, safely away from the passengers. Can you spot the motor, the brake and the controller cabinet?",
+  motor: "Meet the motor, the muscle of the lift. There's no gearbox here! Three phase current lights up the coils one after another, and that spinning magnetic field simply drags the magnet rotor around. More current means more torque, and a higher frequency means more speed. Pretty neat, right?",
+  sheave: "This is the sheave, a grooved wheel. The ropes don't wind around it like a fishing reel. They grip it by friction. So the same ropes work for any building height! And if the car ever lands on its buffer, the ropes just slip, which protects the motor.",
+  brake: "Now the brake, and here's the clever part. It is held on by springs, so it is always clamped by default. Only when the coil gets power does it pull the shoes away. Lose power, and the lift stops safely, all by itself!",
+  ctrl: "This cabinet is the brain. The ladder logic you saw runs right here. Those little lamps on the front show the relays working in real time: safe, run, up, down, brake, and the door relays. Watch them blink as the lift moves!",
+  gov: "Here's a quiet hero: the overspeed governor. A rope loop from the car spins this wheel. If the car ever goes about fifteen percent too fast, flyweights swing out and trip a jaw. That grabs the rope and sets off the safety gear. It doesn't even need the controller!",
+  ropes: "These steel ropes hold the car on one side and the counterweight on the other. Several ropes share the load, and any single one could hold the car on its own. The motor only has to handle the difference in tension between the two sides.",
+  cw: "The counterweight is the secret to an efficient lift. It weighs about as much as the car plus almost half a full load. So the motor only lifts the difference, not the whole car! And when a light car goes up, the counterweight pulls, and the motor actually generates electricity.",
+  car: "This is the car, the part passengers actually see. It rides on the guide rails, with a load sensor under the floor. Step in with too much weight, over six hundred and thirty kilograms, and the overload alarm keeps the car parked.",
+  cardoor: "Let's look at the door. A small motor on the roof drives a belt that slides both panels together. A cam on the car door unlocks the landing door, so they only open when they line up. And limit switches stop the motor at each end. Press Open and watch!",
+  eye: "See that thin red beam across the doorway? That's the photo eye. If somebody steps through while the door is closing, the beam breaks, and the door immediately reverses. Try the block door eye button, and watch the beam turn yellow!",
+  landing: "Every floor has its own landing door, and it stays locked unless the car is right there. The lock is part of the safety chain. So nobody can ever open a door onto an empty shaft. Clever, isn't it?",
+  hall: "The call button, on every floor. Press it, and the call relay remembers, so the button stays lit until the car arrives. And that little green lamp tells you the car is nearby.",
+  rails: "Two tall steel guide rails run the whole height of the shaft. Guide shoes on the car slide along them, keeping the ride smooth and straight. In an emergency, they also take the full grip of the safety gear.",
+  sgear: "Under the car, you'll find the safety gear: strong steel wedges. If the governor trips, they bite into the rails and stop the car mechanically. Even if every rope broke, the car would stay put!",
+  sensor: "Here's how the lift knows exactly where it is. A steel vane on the car passes this sensor at each floor. When they line up within four centimetres, the controller knows the car is level, and starts the door cycle.",
+  buffer: "And finally, down in the pit, the buffers. These springs cushion the car or counterweight if everything else fails. In normal service, they are never touched. And that's the whole tour! Now press a floor button, and watch it all work together."
+};
+parts.forEach(p => { p.talk = talks[p.id]; });
+const simple = {
+  room: ["The little room on top where the lift's engine and brain live.", "Everything that makes the lift move sits up here, out of the passengers' way.", "This is the machine room, right at the top. Think of it as the lift's engine room. The motor, the brakes and the brain are all up here, safe and out of sight."],
+  motor: ["The motor that turns the big wheel.", "Electricity makes magnets spin, and the spinning magnets turn the wheel that pulls the lift up and down. More power means a faster ride.", "This is the motor. Electricity makes magnets spin, a bit like a very strong electric fan, and the spinning turns a big wheel that pulls the lift. More power means a faster ride."],
+  sheave: ["The big grooved wheel that pulls the ropes.", "The ropes sit in grooves and grip the wheel. When the wheel turns, the ropes move, and the lift goes up or down.", "This is the big wheel. The ropes rest in its grooves and grip it, like a bike chain on a gear. When the wheel turns, the ropes move, and the car goes up or down."],
+  brake: ["The brake that keeps the lift from moving.", "Springs push the brake on by default. It only lets go when the lift is told to move, so if the power fails the lift simply stays put.", "This is the brake. Springs keep it clamped on all the time. It only lets go when the lift needs to move. So if the power ever goes out, the lift just stops and stays safe."],
+  ctrl: ["The brain of the lift.", "It remembers which buttons were pressed and decides when to move, stop and open the doors. The little lights show what it is thinking.", "This is the brain. It remembers which buttons people pressed, and decides when to go, stop, and open the doors. The little lights show what it is thinking right now."],
+  gov: ["A speed guard that watches for a lift going too fast.", "Its wheel spins with the car. If it spins too fast, weights swing out and set off the emergency brakes.", "This is a speed guard. Its wheel spins along with the car. If the car ever goes too fast, little weights fly outward and set off the emergency brakes."],
+  ropes: ["Strong steel ropes that hold the car.", "One end holds the car and the other holds a heavy weight. There are several, and any one of them could carry the car alone.", "These strong steel ropes hold the car up. One end holds the car, the other holds a heavy weight. There are several, and any single one could carry the car alone."],
+  cw: ["A heavy weight that balances the car.", "It works like a seesaw. The weight almost matches the car, so the motor only needs a small push.", "This is the counterweight. Imagine a seesaw. The car is on one side, and a heavy block of nearly the same weight is on the other. So the motor only needs a small push to move things."],
+  car: ["The cabin you ride in.", "It slides along tracks and has a sensor in the floor that notices when it is too full.", "This is the car, where you ride. It slides up and down on tracks. There is a sensor in the floor, and if too many people get in, the lift refuses to move."],
+  cardoor: ["The doors that open and close by themselves.", "A small motor slides the door panels. Switches stop it exactly when the door is fully open or fully closed.", "These are the car doors. A small motor slides them open and shut, and little switches tell it when to stop, so the doors never over-travel. Press Open and watch!"],
+  eye: ["An invisible light beam that keeps the doors from closing on people.", "If something blocks the beam, the door stops and opens again.", "This red line is a light beam across the door. If you step in the way, the beam is blocked, and the door opens again instead of closing on you."],
+  landing: ["The door you see on each floor.", "It stays locked unless the lift is right there, so you can never step into an empty shaft.", "This is the door on each floor. It stays locked unless the lift is actually there, so nobody can step into an empty shaft."],
+  hall: ["The button you press to call the lift.", "The lift remembers your press, and the button stays lit until the car arrives.", "This is the call button. When you press it, the lift remembers, and the button stays lit until it arrives."],
+  rails: ["Metal tracks the car slides along.", "They keep the car and the weight moving straight, like train tracks standing upright.", "These tall metal tracks guide the car, like train tracks standing upright. They keep the ride smooth and straight."],
+  sgear: ["Emergency clamps under the car.", "If the car ever moves too fast, they grab the tracks and stop it.", "Under the car are emergency clamps. If the car ever moves too fast, they grab the tracks and stop it. A last line of safety."],
+  sensor: ["A switch that tells the lift which floor it is at.", "A small metal flag on the car passes the switch at every floor.", "This is how the lift knows where it is. A little metal flag on the car passes a switch at each floor, and tells the brain, we have arrived."],
+  buffer: ["Springs at the very bottom.", "They soften the landing if everything else fails. They are normally never used.", "At the very bottom are springs, to soften things if everything else fails. In normal use, they are never touched. And that is the tour! Press a floor button to see it all work."]
+};
+const tech = {
+  room: "The drive here is a 24 pole gearless machine fed by a variable frequency drive.",
+  motor: "At full speed the sheave turns at about 35 revolutions per minute, which is only 7 hertz from the drive, and the contactors K up and K down choose the phase order.",
+  sheave: "The sheave radius is 0.65 metres, so car speed is the shaft angular speed times 0.65.",
+  brake: "Relay K brake energises coil Y 1 whenever K up or K down is on, so the brake is released only while the car is being driven.",
+  ctrl: "K safe, K run, K up and K down are interlocked, so both contactors can never close at once.",
+  gov: "The trip point is 115 percent of rated speed, which is 2.76 metres per second here.",
+  ropes: "Car side tension minus counterweight side tension, times the sheave radius, is the torque the motor must resist.",
+  cw: "Here it weighs 1083 kilograms against an 800 kilogram car, so the imbalance is the passenger load minus 283 kilograms.",
+  car: "The overload input opens the safety chain above 630 kilograms, which drops K safe and K run.",
+  cardoor: "Limit switch 2 opens in series with the open circuit, and limit switch 1 in series with the close circuit, so the motor is cut at the ends of travel.",
+  eye: "A blocked beam energises K door request, which reseals K door open and resets timer 1.",
+  landing: "The door lock contact is part of the series safety chain that must close before K run can pick up.",
+  hall: "The button pulse seals the call relay in with its own contact until limit switch 2 and the floor sensor clear it.",
+  rails: "The T section rails carry the guide shoe side loads and the full braking force of the safety gear.",
+  sgear: "The governor rope pulls a linkage that wedges the gear against the rails.",
+  sensor: "The floor sensor input is true within 4 centimetres of the landing and drives the arrived relay.",
+  buffer: "At the rated 2.4 metres per second, real installations use oil buffers; the springs here are a simplification."
+};
+const txt = p => $('#expLevel').value === 'simple' ? { role: simple[p.id][0], how: simple[p.id][1], talk: simple[p.id][2] } : { role: p.role, how: p.how, talk: p.talk + ' ' + tech[p.id] };
+function renderCard(p) { const t = txt(p); $('#pname').textContent = p.name; $('#prole').textContent = t.role; $('#phow').textContent = t.how; }
+
+let sel = parts[0], tourT = null, labelsOn = false, partT0 = 0, partK = 0;
+const hotsEl = $('#hots'), plist = $('#plist');
+parts.forEach((p, i) => {
+  const h = document.createElement('button'); h.className = 'hot'; h.innerHTML = `<span>${i + 1}</span><em>${p.name}</em>`; h.setAttribute('aria-label', p.name); h.onclick = () => selectPart(p.id); hotsEl.appendChild(h); p.hot = h;
+  const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b><span>${p.name}</span>`; b.onclick = () => selectPart(p.id); plist.appendChild(b); p.btn = b;
+});
+function selectPart(id, auto) {
+  const p = parts.find(q => q.id === id); if (!p) return;
+  if (!auto) { const idx = parts.indexOf(p); if (explainOn) { runExplain(idx); return; } if (tourT) tourI = idx; else stopTour(); }   // clicking during a demo resumes it from that part
+  sel = p; partT0 = performance.now(); partK = parts.indexOf(p) % 3; if (panelName !== 'parts') openPanel('parts');
+  camMode = 'part'; focus = p.cam; goal.d = p.cam.d; camAnim = { az: p.cam.az, el: p.cam.el };
+  document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  parts.forEach(q => { q.hot.classList.toggle('sel', q === p); q.btn.classList.toggle('on', q === p); });
+  renderCard(p);
+  const lk = $('#plink'); lk.hidden = !p.link; if (p.link) { lk.textContent = p.link[2] + ' →'; lk.onclick = () => { stopTour(); openPanel(p.link[0]); openSub(p.link[1]); }; }
+}
+function startTour() {
+  stopTour(); press(4); tourI = 0; selectPart(parts[0].id, true); $('#bTour').textContent = '■ Stop tour';
+  tourT = setInterval(() => { tourI = (tourI + 1) % parts.length; selectPart(parts[tourI].id, true); }, 8000);
+}
+let exId = 0, explainOn = false, tourI = 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let voices = [];
+const vScore = v => (/natural|premium|enhanced|online/i.test(v.name) ? 6 : 0) + (/google/i.test(v.name) ? 4 : 0) + (/samantha|daniel|karen|moira|serena|aaron|jenny|aria|guy/i.test(v.name) ? 3 : 0) + (/en-(US|GB)/i.test(v.lang) ? 2 : 0) + (v.localService ? 0 : 1);
+function loadVoices() {
+  if (!window.speechSynthesis) return;
+  voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)).sort((x, y) => vScore(y) - vScore(x));
+  const sel = $('#expVoiceName'), cur = sel.value; sel.innerHTML = '';
+  voices.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = v.name + ' (' + v.lang + ')'; sel.appendChild(o); });
+  if (cur && voices[+cur]) sel.value = cur;
+}
+if (window.speechSynthesis) { speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); }
+// expand abbreviations and symbols so the voice reads plain words
+const spoken = t => t.replace(/N·m/g, 'newton metres').replace(/K_SAFE/g, 'K safe').replace(/K_RUN/g, 'K run').replace(/K_UP/g, 'K up').replace(/K_DN/g, 'K down').replace(/K_BRK/g, 'K brake')
+  .replace(/K_DOP/g, 'K door open').replace(/K_DCL/g, 'K door close').replace(/K_REQ/g, 'K door request').replace(/LS1/g, 'limit switch 1').replace(/LS2/g, 'limit switch 2')
+  .replace(/\bT1\b/g, 'timer 1').replace(/\bY1\b/g, 'coil Y 1').replace(/\bFS\b/g, 'floor sensor').replace(/\bARR\b/g, 'the arrived relay').replace(/\bVFD\b/g, 'drive')
+  .replace(/\bkW\b/g, 'kilowatts').replace(/\brpm\b/g, 'revolutions per minute').replace(/(\d) ?kg\b/g, '$1 kilograms').replace(/(\d) ?m\/s/g, '$1 metres per second').replace(/(\d) m\b/g, '$1 metres')
+  .replace(/(\d) ?V\b/g, '$1 volts').replace(/\bDC\b/g, 'D C').replace(/÷/g, ' divided by ').replace(/%/g, ' percent').replace(/→/g, ' to ').replace(/·/g, ', ').replace(/\(([^)]*)\)/g, ', $1,');
+function speakOne(text, rate, id, pitch) {
+  return new Promise(res => {
+    const ss = window.speechSynthesis; if (!ss || id !== exId) return res();
+    const u = new SpeechSynthesisUtterance(spoken(text)); u.rate = rate; u.pitch = pitch || 1; u.volume = 1;
+    const v = voices[+$('#expVoiceName').value]; if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+    let done = false; const fin = () => { if (!done) { done = true; res(); } };
+    u.onend = fin; u.onerror = fin; setTimeout(fin, text.length * 110 / rate + 3000); ss.speak(u);
+  });
+}
+async function runExplain(start = 0) {
+  stopTour(); const id = ++exId; explainOn = true; $('#bExplain').textContent = '■ Stop'; press(4);
+  for (let i = start; i < parts.length; i++) {
+    if (id !== exId) return;
+    const p = parts[i], rate = +$('#expVoice').value, t0 = performance.now();
+    selectPart(p.id, true);
+    const head = `<b>${i + 1}/${parts.length} · ${p.name}</b> `;
+    if (rate > 0) {
+      // speak one sentence at a time and show it as a subtitle
+      const sents = txt(p).talk.split(/(?<=[.!?])\s+/);
+      for (let k = 0; k < sents.length; k++) {
+        if (id !== exId) return; const sent = sents[k]; let pitch = 1 + (k % 2 ? 0.05 : -0.02), r = 1;
+        if (k === 0) { pitch = 1.1; r = 0.96; } else if (k === sents.length - 1) { pitch = 0.96; r = 0.94; }   // lively opening, settled close
+        if (/\?$/.test(sent)) pitch += 0.12; if (/!$/.test(sent)) { pitch += 0.08; r *= 1.04; } if (sent.length < 40) r *= 0.95;
+        say(head + sent); await speakOne(sent, rate * r, id, pitch); await sleep(/\?$/.test(sent) ? 550 : /!$/.test(sent) ? 300 : 400);
+      }
+      await sleep(Math.max(0, +$('#expPace').value * 1000 - (performance.now() - t0)));
+    } else { const t = txt(p); say(head + `${t.role} ${t.how.split('. ')[0].replace(/\.$/, '')}.`); await sleep(+$('#expPace').value * 1000); }
+  }
+  if (id === exId) { stopTour(); say('<b>Explain demo finished.</b> Click any numbered marker or part name to look at it again.'); }
+}
+function stopTour() {
+  exId++; explainOn = false; if (tourT) { clearInterval(tourT); tourT = null; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  $('#bTour').textContent = '▶ Guided tour'; $('#bExplain').textContent = '▶ Explain demo';
+}
+$('#expLevel').onchange = () => renderCard(sel);
+$('#bTour').onclick = () => tourT ? stopTour() : startTour();
+$('#bExplain').onclick = () => explainOn ? (stopTour(), say('Explain demo stopped.')) : (demoRun++, demoOn = false, resetBtns(), runExplain());
+$('#bLabels').onclick = () => { labelsOn = !labelsOn; $('#bLabels').setAttribute('aria-pressed', labelsOn); };
+function placeHots() {
+  const show = labelsOn || panelName === 'parts'; hotsEl.hidden = !show; if (!show) return;
+  parts.forEach(p => { const v = p.t().project(camera), ok = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; p.hot.style.display = ok ? '' : 'none';
+    if (ok) { p.hot.style.left = ((v.x + 1) / 2 * rw) + 'px'; p.hot.style.top = ((1 - v.y) / 2 * rh) + 'px'; } });
+}
+const hlPool = [], hlDummy = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+function updateHL(now) {
+  const objs = panelName === 'parts' ? sel.hl() : [];
+  objs.forEach((o, i) => { let h = hlPool[i]; if (!h) { h = hlPool[i] = new THREE.BoxHelper(hlDummy, 0xffb23e); h.material.depthTest = false; h.material.transparent = true; h.renderOrder = 10; scene.add(h); }
+    h.visible = true; h.setFromObject(o); h.material.opacity = 0.65 + 0.35 * Math.sin(now / 180); });
+  for (let i = objs.length; i < hlPool.length; i++) hlPool[i].visible = false;
+}
+
+/* ---------------- motor and drive simulation (2D canvas) ---------------- */
+const mcv = $('#mcv'), mx = mcv.getContext('2d'); mx.scale(2, 2);
+let colC = null, colT = 0, bv = 0;
+const C = () => { const now = performance.now(); if (!colC || now - colT > 500) { const st = getComputedStyle(document.documentElement), g = n => st.getPropertyValue(n).trim(); colC = { fg: g('--fg'), mu: g('--muted'), live: g('--live'), am: g('--amber'), dg: g('--danger'), wire: g('--wire'), bg: g('--panel2'), line: g('--line') }; colT = now; } return colC; };
+const PC = ['#ffb23e', '#4aa3df', '#c58cf0'];
+function drawMotor() {
+  const c = C(), g = mx, TAU = Math.PI * 2; g.clearRect(0, 0, 640, 700);
+  const { dl, thf, the } = ph(), mech = X.pos / R, A = X.amp, mC = 800 + X.load, mW = 1083;
+  bv += ((X.K_BRK ? 1 : 0) - bv) * 0.15;
+  const T = (str, x, y, col, size, al, wgt) => { g.fillStyle = col; g.font = `${wgt || 400} ${size || 11}px "IBM Plex Mono",monospace`; g.textAlign = al || 'left'; g.fillText(str, x, y); };
+  T('GEARLESS MOTOR · CUTAWAY', 14, 16, c.am, 11, 'left', 600);
+  const cx = 160, cy = 172;
+  g.lineWidth = 1.5; g.strokeStyle = c.wire; g.beginPath(); g.arc(cx, cy, 148, 0, TAU); g.stroke(); g.beginPath(); g.arc(cx, cy, 104, 0, TAU); g.stroke();
+  for (let k = 0; k < 12; k++) {
+    const a = -Math.PI / 2 + k * Math.PI / 6, i = A * Math.cos(the - TAU * k / 3), col = PC[k % 3], x = cx + 126 * Math.cos(a), y = cy + 126 * Math.sin(a);
+    g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2); g.globalAlpha = 0.1 + 0.9 * Math.abs(i); g.fillStyle = col; g.fillRect(-15, -17, 30, 34); g.globalAlpha = 1; g.strokeStyle = col; g.lineWidth = 1.2; g.strokeRect(-15, -17, 30, 34); g.restore();
+    T(Math.abs(i) < 0.2 ? '' : i > 0 ? '●' : '×', x, y + 4, c.fg, 12, 'center');
+    T('ABC'[k % 3], cx + 164 * Math.cos(a), cy + 164 * Math.sin(a) + 4, col, 11, 'center', 600);
+  }
+  for (let j = 0; j < 8; j++) {
+    const a0 = mech + j * Math.PI / 4, a1 = a0 + Math.PI / 4;
+    g.beginPath(); g.arc(cx, cy, 94, a0, a1); g.arc(cx, cy, 58, a1, a0, true); g.closePath(); g.globalAlpha = 0.85; g.fillStyle = j % 2 ? '#3b82d6' : '#d6493b'; g.fill(); g.globalAlpha = 1; g.lineWidth = 1; g.strokeStyle = c.bg; g.stroke();
+    const am = a0 + Math.PI / 8; T(j % 2 ? 'S' : 'N', cx + 76 * Math.cos(am), cy + 76 * Math.sin(am) + 4, '#fff', 11, 'center', 600);
+    const fa = thf + j * Math.PI / 4; g.beginPath(); g.arc(cx + 100 * Math.cos(fa), cy + 100 * Math.sin(fa), 4.5, 0, TAU); g.lineWidth = 1.6; g.strokeStyle = c.live; if (j % 2 === 0) { g.fillStyle = c.live; g.fill(); } g.stroke();
+  }
+  g.beginPath(); g.arc(cx, cy, 52, 0, TAU); g.fillStyle = c.bg; g.fill(); g.strokeStyle = c.wire; g.lineWidth = 1.5; g.stroke();
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + 50 * Math.cos(mech), cy + 50 * Math.sin(mech)); g.strokeStyle = c.am; g.lineWidth = 3; g.stroke();
+  T('SHEAVE', cx, cy + 4, c.mu, 10, 'center');
+  T('● field pole · N/S rotor magnets · 8 of 24 poles drawn', cx, 338, c.mu, 10, 'center');
+  T(`field leads rotor by ${Math.abs(dl * 4 * 57.2958).toFixed(0)}° electrical`, cx, 352, c.fg, 11, 'center');
+  // brake
+  const bx = 482, by = 100;
+  T('SPRING BRAKE · DRUM VIEW', 340, 16, c.am, 11, 'left', 600);
+  g.lineWidth = 7; g.strokeStyle = c.mu; g.beginPath(); g.arc(bx, by, 44, 0, TAU); g.stroke();
+  g.lineWidth = 2; g.strokeStyle = c.am; for (let k = 0; k < 3; k++) { const a = mech + k * TAU / 3; g.beginPath(); g.moveTo(bx + 14 * Math.cos(a), by + 14 * Math.sin(a)); g.lineTo(bx + 38 * Math.cos(a), by + 38 * Math.sin(a)); g.stroke(); }
+  const gap = 16 * bv;
+  [-1, 1].forEach(sd => {
+    g.save(); g.translate(sd * gap, 0); g.lineWidth = 12; g.strokeStyle = bv < 0.5 ? c.am : c.mu; g.beginPath(); g.arc(bx, by, 56, sd < 0 ? Math.PI - 0.8 : -0.8, sd < 0 ? Math.PI + 0.8 : 0.8); g.stroke(); g.restore();
+    const x0 = bx + sd * (64 + gap), x1 = bx + sd * 108; g.lineWidth = 4; g.strokeStyle = c.wire; g.beginPath(); g.moveTo(x1, by - 28); g.lineTo(x1, by + 28); g.stroke();
+    g.lineWidth = 1.6; g.strokeStyle = c.mu; g.beginPath(); g.moveTo(x0, by); for (let n = 1; n <= 7; n++) g.lineTo(x0 + (x1 - x0) * n / 8, by + (n % 2 ? -7 : 7)); g.lineTo(x1, by); g.stroke();
+  });
+  g.fillStyle = c.live; g.globalAlpha = 0.12 + 0.3 * bv; g.fillRect(bx - 34, by + 72, 68, 24); g.globalAlpha = 1; g.strokeStyle = bv > 0.5 ? c.live : c.wire; g.lineWidth = 1.6; g.strokeRect(bx - 34, by + 72, 68, 24);
+  T('Y1 COIL', bx, by + 88, bv > 0.5 ? c.live : c.mu, 11, 'center');
+  T(X.K_BRK ? 'RELEASED: coil pulls the shoes off' : 'SET: springs clamp the drum', bx, by + 114, X.K_BRK ? c.live : c.am, 11, 'center', 600);
+  // balance
+  T('BALANCE · CAR VS COUNTERWEIGHT', 340, 252, c.am, 11, 'left', 600);
+  const k = 0.05, base = 340;
+  g.fillStyle = c.mu; g.globalAlpha = 0.5; g.fillRect(378, base - 800 * k, 56, 800 * k); g.globalAlpha = 0.9; g.fillStyle = X.ovld ? c.dg : c.am; g.fillRect(378, base - mC * k, 56, X.load * k); g.globalAlpha = 0.6; g.fillStyle = c.live; g.fillRect(522, base - mW * k, 56, mW * k); g.globalAlpha = 1;
+  T(`car ${mC} kg`, 406, base - mC * k - 5, c.fg, 11, 'center'); T(`weight ${mW} kg`, 550, base - mW * k - 5, c.fg, 11, 'center');
+  T(`${mC - mW > 0 ? '+' : ''}${mC - mW} kg`, 480, base - 24, c.fg, 15, 'center', 600); T('motor carries the difference', 480, base - 8, c.mu, 10, 'center');
+  // scopes
+  const scope = (x, y, w, h, title, series, lo, hi) => {
+    T(title, x, y - 7, c.am, 11, 'left', 600);
+    g.strokeStyle = c.line; g.lineWidth = 1; g.strokeRect(x, y, w, h);
+    const zy = y + h * hi / (hi - lo); g.setLineDash([3, 4]); g.beginPath(); g.moveTo(x, zy); g.lineTo(x + w, zy); g.stroke(); g.setLineDash([]);
+    series.forEach(([idx, col, lab, sc], n) => {
+      g.beginPath(); hist.forEach((q, m) => { const px = x + w * (1 - (hist.length - 1 - m) / 200), py = y + h * (hi - q[idx] * sc) / (hi - lo); m ? g.lineTo(px, py) : g.moveTo(px, py); });
+      g.strokeStyle = col; g.lineWidth = 1.6; g.stroke(); T(lab, x + w - 4 - n * 150, y - 7, col, 10.5, 'right');
+    });
+    T('−6 s', x + 3, y + h - 4, c.mu, 9.5); T('now', x + w - 3, y + h - 4, c.mu, 9.5, 'right');
+  };
+  scope(14, 392, 612, 100, 'PHASE CURRENTS · VFD OUTPUT', [[0, PC[0], 'A', 1], [1, PC[1], 'B', 1], [2, PC[2], 'C', 1]].map((e, n) => [e[0], e[1], e[2], e[3]]), -1.1, 1.1);
+  scope(14, 525, 612, 90, 'SPEED AND TORQUE', [[3, c.live, 'speed ±2.6 m/s', 1 / 2.6], [4, c.am, 'torque ±3 kN·m', 1 / 3000]], -1.1, 1.1);
+  const items = [['SHEAVE SPEED', `${X.rpm.toFixed(1)} rpm`], ['VFD FREQUENCY', `${X.hz.toFixed(1)} Hz`], ['SHAFT TORQUE', `${Math.round(Math.abs(X.tq))} N·m`],
+    ['MECH POWER', X.K_BRK ? `${X.pw.toFixed(1)} kW ${X.pw > 0.05 ? 'motoring' : X.pw < -0.05 ? 'REGEN' : ''}` : 'held by brake']];
+  items.forEach(([l, v], n) => { T(l, 14 + n * 156, 640, c.mu, 9.5); T(v, 14 + n * 156, 658, c.fg, 13, 'left', 600); });
+  const it2 = [['PHASE CURRENT', `${(A * 38).toFixed(0)} A`], ['CAR LOAD', `${X.load} kg`], ['BRAKE', X.K_BRK ? 'RELEASED' : 'SET'], ['DRIVE', X.K_BRK ? 'ENABLED' : 'OFF']];
+  it2.forEach(([l, v], n) => { T(l, 14 + n * 156, 680, c.mu, 9.5); T(v, 14 + n * 156, 696, c.fg, 13, 'left', 600); });
+}
+
+/* ---------------- UI ---------------- */
+const fb = $('#floors'), fbtn = [];
+for (let i = 0; i < N; i++) { const b = document.createElement('button'); b.textContent = NAMES[i]; b.title = 'Call floor ' + NAMES[i]; b.onclick = () => press(i); fb.appendChild(b); fbtn.push(b); }
+const flags = { estop: $('#tEstop'), ovld: $('#tOvld'), userObs: $('#tObs') };
+const flagMsg = { estop: ['E-STOP pressed', 'E-STOP released'], ovld: ['Overload sensor tripped', 'Overload cleared'], userObs: ['Hand placed in doorway', 'Doorway clear'] };
+function syncToggles() { for (const k in flags) flags[k].setAttribute('aria-pressed', !!X[k]); }
+for (const k in flags) flags[k].onclick = () => { X[k] = !X[k]; syncToggles(); log(flagMsg[k][X[k] ? 0 : 1], X[k] ? 'r' : 'g'); };
+$('#bOpen').onclick = pressOpen; $('#bClose').onclick = pressClose;
+function setSpeed(s) { speed = s; document.querySelectorAll('[data-sp]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.sp === s)); }
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => setSpeed(+b.dataset.sp));
+const say = h => { $('#say').innerHTML = h; };
+function resetBtns() { $('#bDemo').textContent = '▶ Full demo'; $('#bDoorDemo').textContent = '▶ Door demo'; }
+function reset() { demoRun++; demoOn = false; initState(); prev = {}; logBuf.length = 0; $('#log').innerHTML = ''; syncToggles(); resetBtns(); say('Reset. The car is parked at G with doors closed.'); }
+$('#bReset').onclick = reset;
+
+/* side panel */
+const main = $('#main'), panel = $('#panel'), titles = { parts: 'Explain lift', circuit: 'Circuit', log: 'Event log', guide: 'How it works' };
+let panelName = null, subName = 'power';
+function openPanel(n) {
+  panelName = panelName === n ? null : n; main.classList.toggle('open', !!panelName); panel.hidden = !panelName;
+  document.querySelectorAll('[data-panel]').forEach(b => b.setAttribute('aria-pressed', b.dataset.panel === panelName));
+  document.querySelectorAll('.pane').forEach(p => p.hidden = p.dataset.pane !== panelName);
+  $('#subtabs').hidden = panelName !== 'circuit'; if (panelName) $('#ptitle').textContent = titles[panelName];
+  if (panelName === 'parts') selectPart(sel.id, true); else stopTour();
+}
+function openSub(s) {
+  subName = s; document.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === s));
+  document.querySelectorAll('[data-subpane]').forEach(p => p.hidden = p.dataset.subpane !== s);
+}
+document.querySelectorAll('[data-panel]').forEach(b => b.onclick = () => openPanel(b.dataset.panel));
+document.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => openSub(b.dataset.sub));
+$('#pclose').onclick = () => openPanel(panelName);
+
+/* demos */
+let demoRun = 0, demoOn = false;
+const cancel = {};
+async function runDemo(kind) {
+  const id = ++demoRun; demoOn = kind; resetBtns();
+  $(kind === 'full' ? '#bDemo' : '#bDoorDemo').textContent = '■ Stop demo';
+  const until = fn => new Promise((res, rej) => { const t = setInterval(() => { if (id !== demoRun) { clearInterval(t); rej(cancel); } else if (fn()) { clearInterval(t); res(); } }, 80); });
+  const wait = s => { const t0 = X.t; return until(() => X.t - t0 >= s); };
+  const flag = (k, v) => { X[k] = v; syncToggles(); log(flagMsg[k][v ? 0 : 1], v ? 'r' : 'g'); };
+  try {
+    initState(); prev = {}; syncToggles(); setSpeed(2);
+    if (kind === 'door') {
+      setCam('doors');
+      say('<b>1 · OPEN REQUEST</b> The car is parked at G with the door closed. A passenger presses <b>Open</b>. OPEN BTN energises <b>K_REQ</b>; the car is standing at a floor, so <b>K_DOP</b> seals in and door motor M2 starts.');
+      await wait(2); pressOpen();
+      await until(() => X.door > 0.25);
+      say('<b>2 · OPENING</b> Current flows +24 V → K_DOP contact → LS2 (NC) → M2. The car door and the landing door slide open together. Open <i>Circuit → Power circuit</i> to watch the current path.');
+      await until(() => X.LS_DO);
+      say('<b>3 · FULLY OPEN</b> At the end of travel limit switch <b>LS2</b> opens in the motor circuit, so M2 stops even though K_DOP is still energised. LS2 also starts timer <b>T1</b> (3 s dwell).');
+      await until(() => X.K_DCL && X.door < 0.7);
+      say('<b>4 · CLOSING</b> T1 expired, so K_DOP dropped and <b>K_DCL</b> drives M2 the other way through LS1 (NC). The pulley on the car roof turns with the door.');
+      flag('userObs', true);
+      say('<b>5 · PHOTO-EYE</b> A hand blocks the beam. PHOTO-EYE energises <b>K_REQ</b>, which re-energises K_DOP: the closing door reverses and reopens. T1 stays reset while the beam is blocked.');
+      await wait(3.5); flag('userObs', false);
+      say('<b>6 · BEAM CLEAR</b> The beam is clear again. LS2 is closed, so T1 restarts from zero and the door will close.');
+      await until(() => X.LS_DC && X.t > 0 && X.door === 0 && !X.K_DOP && X.T1acc === 0 && !X.photo && X.CALL.every(c => !c) && X.openBtn === false && X.K_REQ === false && X.LS_DC && X.t > 12);
+      say('<b>7 · CLOSE BUTTON</b> Doors closed: LS1 closes. Now Open, then Close early. CLOSE BTN passes through K_CLS (photo-eye clear, not overloaded) and drops K_DOP before T1 expires.');
+      await wait(1); pressOpen(); await until(() => X.LS_DO); await wait(1); pressClose();
+      await until(() => X.K_CLS || X.K_DCL); await until(() => X.LS_DC);
+      say('<b>8 · OVERLOAD AT THE DOOR</b> The load sensor trips while the car is at G. <b>OVERLOAD</b> feeds K_REQ, so the door opens and is held. T1 cannot count, and K_SAFE drops so the car cannot leave.');
+      await wait(1); flag('ovld', true); await until(() => X.LS_DO); await wait(4);
+      say('<b>9 · LOAD REDUCED</b> Overload clears, K_SAFE closes again and T1 starts counting. The door closes when it finishes.');
+      flag('ovld', false); await until(() => X.LS_DC && X.T1acc === 0 && !X.K_DOP && X.t > 20);
+      say('<b>10 · DOOR LOCK INTERLOCK</b> Door closed, so LS1 lets <b>K_RUN</b> energise. A call for floor 2 is now accepted and the car leaves. At floor 2 the doors open by themselves.');
+      press(2); await until(() => X.FS[2] && X.LS_DO);
+      say('<b>Done.</b> Floor 2: ARR requested the door, K_DOP opened it, LS2 stopped the motor and T1 is counting. Press any button to keep playing.');
+    } else {
+      setCam('follow');
+      say('<b>1 · CALL</b> The car is idle at G. A passenger presses <b>3</b>. The BTN contact closes and CALL 3 seals itself in, so the call is remembered.');
+      press(3); await wait(3);
+      say('<b>2 · START</b> CALL ABOVE and PRI_UP are true, so <b>K_UP</b> energises. The brake lamp turns green: K_BRK released, motor driving the sheave. Watch the counterweight fall.');
+      await until(() => X.pos > 4.2); setCam('overview');
+      say('<b>3 · COLLECTIVE</b> The car passes floor 1, and two more calls arrive: 1 (behind it) and 4 (ahead). The direction memory keeps it going up. It serves 3, then 4, before turning back.');
+      press(1); press(4);
+      await until(() => (X.SLOW && X.K_UP && X.pos > 7) || X.FS[3]);
+      say('<b>4 · LEVELLING</b> A call is within 1.8 m ahead, so <b>SLOW</b> picks up and the car decelerates to creep speed. At the landing the floor sensor closes <b>ARR</b>, K_UP drops, the brake sets.');
+      await until(() => X.FS[3] && X.LS_DO); setCam('doors');
+      say('<b>5 · DOORS</b> Doors are fully open (LS2). CALL 3 clears and timer <b>T1</b> counts 3 s. K_RUN is off while the door is open, so the car cannot move.');
+      await until(() => X.K_DCL && X.door < 0.7); flag('userObs', true);
+      say('<b>6 · PHOTO-EYE</b> A passenger blocks the closing door. PHOTO-EYE energises K_REQ, which re-energises <b>K_DOP</b>: the door reverses and stays open.');
+      await wait(3.5); flag('userObs', false); setCam('overview');
+      await until(() => X.FS[4] && X.LS_DO);
+      say('<b>7 · OVERLOAD</b> At floor 4, the load sensor trips. <b>K_SAFE</b> drops, so K_RUN drops and the car is locked. The doors are held open with T1 frozen.');
+      flag('ovld', true); await wait(4.5); flag('ovld', false);
+      say('<b>8 · REVERSE</b> Overload cleared. No calls remain above, so CALL ABOVE is false and PRI_DN takes over. The car now goes down for the stored call at floor 1.');
+      await until(() => X.K_DN && X.pos < 9);
+      say('<b>9 · EMERGENCY STOP</b> E-STOP opens the safety chain mid-travel. K_SAFE, K_RUN and K_DN all drop, K_BRK drops and the brake clamps the sheave.');
+      flag('estop', true); await wait(3.5); flag('estop', false);
+      say('<b>10 · RESUME</b> E-STOP released. The call memory still holds floor 1, so the car restarts by itself.');
+      await until(() => X.FS[1] && X.LS_DO);
+      say('<b>Done.</b> Every motion above came from the circuit. Open <i>Circuit</i> to see it, or press any floor button to keep playing.');
+    }
+  } catch (e) { if (e !== cancel) throw e; return; }
+  demoOn = false; resetBtns();
+}
+const demoBtn = k => () => { if (demoOn === k) { demoRun++; demoOn = false; resetBtns(); say('Demo stopped. The lift keeps running; press any floor button.'); } else runDemo(k); };
+$('#bDemo').onclick = demoBtn('full'); $('#bDoorDemo').onclick = demoBtn('door');
+
+/* ---------------- main loop ---------------- */
+let last = performance.now(), acc = 0, uiT = 0;
+function frame(now) {
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now; acc += rdt * speed;
+  while (acc >= 1 / 120) { scan(1 / 120); acc -= 1 / 120; }
+  resize(); update3D(); updateCam(rdt); updateHL(now); renderer.render(scene, camera); placeHots();
+  if (panelName === 'circuit') {
+    if (subName === 'ladder') drawLadder(); else if (subName === 'power') drawPower(); else if (subName === 'motor') drawMotor(); else drawIO();
+  }
+  uiT += rdt; if (uiT > 0.08) { uiT = 0; updateUI(); }
+  requestAnimationFrame(frame);
+}
+function updateUI() {
+  const fl = Math.max(0, Math.min(N - 1, Math.round(X.pos / H)));
+  $('#dFloor').textContent = NAMES[fl];
+  $('#dDir').textContent = X.K_UP ? '▲' : X.K_DN ? '▼' : '•';
+  $('#dDoor').textContent = 'DOORS ' + (X.K_DOP && X.door < 1 ? 'OPENING' : X.K_DCL && X.door > 0 ? 'CLOSING' : X.door >= 1 ? 'OPEN' : 'CLOSED');
+  $('#dBar').style.width = (X.door * 100) + '%';
+  $('#dVel').textContent = Math.abs(X.v).toFixed(2) + ' m/s';
+  $('#lMotor').classList.toggle('on', X.K_UP || X.K_DN); $('#lMotor').lastChild.textContent = X.K_UP ? 'MOTOR UP' : X.K_DN ? 'MOTOR DOWN' : 'MOTOR OFF';
+  $('#lBrake').classList.toggle('on', X.K_BRK); $('#lBrake').lastChild.textContent = X.K_BRK ? 'BRAKE RELEASED' : 'BRAKE SET';
+  $('#lSafe').classList.toggle('on', !X.K_SAFE); $('#lSafe').lastChild.textContent = X.K_SAFE ? 'SAFETY OK' : 'SAFETY OPEN';
+  fbtn.forEach((b, i) => { b.classList.toggle('lit', X.CALL[i]); b.classList.toggle('here', i === fl && X.FS[i]); });
+  if (panelName === 'circuit') $('#explain').innerHTML = explain();
+  if (panelName === 'parts') $('#plive').textContent = 'LIVE · ' + sel.live();
+  if (logBuf.length) { const el = $('#log'); while (logBuf.length) { const [t, m, c] = logBuf.shift(); const d = document.createElement('div'); d.innerHTML = `<time>${t}</time><span class="${c}"></span>`; d.lastChild.textContent = m; el.appendChild(d); }
+    while (el.children.length > 120) el.removeChild(el.firstChild); if (panelName === 'log') $('#log').parentNode.scrollTop = $('#log').parentNode.scrollHeight; }
+}
+if (!window.THREE) throw new Error('three.js failed to load');
+openSub('power');
+window.__lift = { step: n => { for (let i = 0; i < n; i++) scan(1 / 120); }, X: () => X, press, pressOpen, pressClose, runDemo, openPanel, openSub };
+requestAnimationFrame(frame);
+})();
+</script>
