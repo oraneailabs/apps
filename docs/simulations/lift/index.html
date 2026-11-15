@@ -132,9 +132,7 @@ select{font:500 13px var(--body);color:var(--fg);background:var(--panel2);border
 .modes button{border:0;background:transparent;padding:5px 18px;min-height:30px;font:600 13px var(--display);letter-spacing:.04em}
 .modes button[aria-selected="true"]{background:var(--amber);color:var(--on-amber)}
 .tools{gap:10px 14px}
-.voice{position:relative;display:flex}
-.voice button:first-child{border-radius:4px 0 0 4px}
-.voice button:last-child{border-radius:0 4px 4px 0;border-left:0;padding:6px 9px}
+.voice{position:relative;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}   /* Voice switch plus an Advanced dropdown, like the other advanced options */
 .vmenu{position:absolute;right:0;top:38px;z-index:30;width:290px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .vmenu[hidden]{display:none}.vmenu select{width:100%}
 .hint{color:var(--muted);font-size:12.5px}
@@ -175,13 +173,14 @@ button.adv[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
   .camtabs button{min-height:28px;padding:2px 8px}
   .say{left:8px;right:8px;bottom:8px;font-size:12px;padding:6px 10px;max-height:34%;overflow:auto;min-height:0}
   .hot{width:30px;height:30px;font-size:12px}
-  .vmenu{position:fixed;left:12px;right:12px;top:auto;bottom:12px;width:auto;z-index:40}
+  .vmenu{width:100%}
   .diag{min-width:560px}
   .plist{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pcard h3{font-size:16px}
   .pane[data-pane="parts"]:not([hidden]){display:flex;flex-direction:column}
   .pcard{order:-1;margin-bottom:12px}   /* part details first, list below */
 }
+.vslide{position:absolute;left:8px;top:124px;bottom:76px;width:22px;writing-mode:vertical-lr;direction:rtl;accent-color:var(--amber);z-index:3;cursor:pointer;margin:0}
 .hots{position:absolute;inset:0;pointer-events:none;z-index:2}
 .hots[hidden],.seg[hidden],button[hidden]{display:none}
 .hot{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;padding:0;min-height:0;pointer-events:auto;background:#05080bdd;color:#ffb23e;border:1.5px solid #ffb23e;font:700 11px var(--mono);display:grid;place-items:center}
@@ -211,6 +210,7 @@ button.adv[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
   #bMenu{display:inline-flex;align-items:center;min-height:36px}
   .zs{display:none}.top.menu .zs{display:flex}
   .top.menu{position:static}
+  .vmenu{position:static;flex-basis:100%;width:100%;border-style:dashed}   /* inside the folded Settings, the voice options open inline */
 }
 .topright{display:flex;align-items:center;gap:8px;margin-left:auto}
 .topright .segc button{display:grid;place-items:center;padding:6px 11px}
@@ -221,6 +221,10 @@ button.adv[aria-expanded="true"]{color:var(--amber);border-color:var(--amber)}
 .zone .bar,.zbody{align-items:flex-end}
 .gl{user-select:none;cursor:default;white-space:nowrap}
 .zone .advrow .gl{align-self:center}
+/* buttons that toggle between Start and Stop or On and Off keep one width, so nothing shifts when they change */
+#bExplain{min-width:9.6em}
+#vOn{min-width:8.6em}
+.demo{min-width:15em}
 /* ---- button roles: each kind of control looks different ---- */
 /* primary run actions: solid amber; while running they turn red and read Stop */
 button.pri{box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
@@ -248,7 +252,6 @@ button.sw[aria-pressed="true"]{border-color:var(--danger);color:var(--danger);ba
 button.sw[aria-pressed="true"]::before{background:radial-gradient(circle at 22px 8px,#fff 6px,transparent 6.5px),var(--danger)}
 button.sw.live[aria-pressed="true"]{border-color:var(--live);color:var(--live);background:color-mix(in srgb,var(--live) 12%,var(--panel2))}
 button.sw.live[aria-pressed="true"]::before{background:radial-gradient(circle at 22px 8px,#fff 6px,transparent 6.5px),var(--live)}
-.voice button.sw{border-radius:4px 0 0 4px}
 /* reset: red text, no fill */
 button.danger{background:transparent;color:var(--danger);border-color:color-mix(in srgb,var(--danger) 55%,var(--line))}
 button.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);border-color:var(--danger)}
@@ -315,11 +318,12 @@ button.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);
           <span class="vsep"></span>
           <div class="grp"><span class="gl">Voice</span>
             <div class="voice">
-              <button class="sw live" id="vOn" aria-pressed="false" title="Read demos and explanations aloud">Voice off</button><button id="vCfg" aria-expanded="false" aria-label="Voice settings">▾</button>
+              <button class="sw live" id="vOn" aria-pressed="false" title="Read demos and explanations aloud">Voice off</button><button class="adv" id="vCfg" aria-expanded="false" aria-label="Voice advanced options">Advanced ▾</button>
               <div class="vmenu" id="vMenu" hidden>
                 <label class="gl" for="expVoiceName">Voice</label><select id="expVoiceName"></select>
+                <button id="vTest" type="button">Test voice</button>
                 <div class="grp"><span class="gl">Speaking speed</span><div class="segc" id="vRates"><button data-vr="0.75" aria-pressed="false">Slow</button><button data-vr="0.9" aria-pressed="true">Normal</button><button data-vr="1.1" aria-pressed="false">Fast</button></div></div>
-                <p class="hint" style="margin:0">Voice reads demos and explanations. A demo pauses while a sentence is spoken. Natural or Online voices sound best.</p>
+                <p class="hint" style="margin:0">Voice reads demos and explanations. A demo pauses while a sentence is spoken. Google voices only; the default is Google UK English Female.</p><p class="hint" id="vNote" style="margin:0"></p>
               </div>
             </div>
           </div>
@@ -334,6 +338,7 @@ button.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);
     <div class="stage">
       <canvas id="view" aria-label="3D view of the lift shaft"></canvas>
       <div class="hots" id="hots" hidden></div>
+      <input type="range" class="vslide" id="vSlide" aria-label="Move the view up or down the shaft" title="Slide up or down the shaft. You can also Shift-drag or two-finger drag.">
       <div class="hud">
         <div class="disp"><div class="big"><span id="dFloor">G</span><small id="dDir">•</small></div><div class="sub" id="dDoor">DOORS CLOSED</div><div class="dbar"><i id="dBar"></i></div><div class="sub" id="dVel">0.00 m/s</div></div>
         <div class="lamps">
@@ -343,8 +348,8 @@ button.danger:hover{background:color-mix(in srgb,var(--danger) 12%,transparent);
         </div>
       </div>
       <div class="camtabs">
-        <button data-cam="overview" aria-pressed="true">Overview</button>
-        <button data-cam="follow" aria-pressed="false">Follow car</button>
+        <button data-cam="overview" aria-pressed="false">Overview</button>
+        <button data-cam="follow" aria-pressed="true">Follow car</button>
         <button data-cam="doors" aria-pressed="false">Doors</button>
         <button data-cam="machine" aria-pressed="false">Machine room</button>
         <button id="bLabels" aria-pressed="false">Labels</button>
@@ -839,22 +844,34 @@ const cabLamps = ['K_SAFE', 'K_RUN', 'K_UP', 'K_DN', 'K_BRK', 'K_DOP', 'K_DCL', 
   s.position.set(-1.0 + ((n % 4) - 1.5) * 0.11, YS + 0.15 + Math.floor(n / 4) * 0.13, 1.16); scene.add(s); return [m, k]; });
 
 // orbit camera
-let az = 0.5, el = 0.2, dist = OV, camMode = 'overview', camAnim = null, focus = null, brkVis = 0;
-const tgt = new THREE.Vector3(0, OY, 0), goal = { d: OV, z: 0 };
-const pts = new Map(); let pinch = 0;   // one finger orbits, two fingers pinch to zoom
+let az = 0.5, el = 0.2, dist = 9, camMode = 'follow', camAnim = null, focus = null, brkVis = 0, panY = OY, sliding = false, zoomMul = 1;
+const tgt = new THREE.Vector3(0, 1.3, 0), goal = { d: 9, z: 0 };   // the camera follows the car by default
+const pts = new Map(); let pinch = 0, midY = null;   // one finger orbits; two fingers pinch to zoom and slide up or down; Shift or right-drag slides too
+const freeCam = () => { if (camMode !== 'free' && camMode !== 'overview') { camMode = 'free'; focus = null; document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', 'false')); } };
+const slide = dy => { freeCam(); panY = Math.max(-1, Math.min(YS + 1, panY + dy * dist * 0.0022)); };
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => { camAnim = null; canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); canvas._l = [e.clientX, e.clientY]; });
 canvas.addEventListener('pointermove', e => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
-  if (pts.size === 2) { const [p, q] = [...pts.values()], d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (pinch) goal.d = Math.max(3, Math.min(60, goal.d * pinch / d)); pinch = d; return; }
-  pinch = 0; if (!canvas._l) return;
-  az -= (e.clientX - canvas._l[0]) * 0.008; el = Math.max(-0.2, Math.min(1.2, el + (e.clientY - canvas._l[1]) * 0.006)); canvas._l = [e.clientX, e.clientY];
+  if (pts.size === 2) { const [p, q] = [...pts.values()], d = Math.hypot(p[0] - q[0], p[1] - q[1]), my = (p[1] + q[1]) / 2; if (pinch) zoomBy(pinch / d); if (midY !== null) slide(my - midY); pinch = d; midY = my; return; }
+  pinch = 0; midY = null; if (!canvas._l) return;
+  const dx = e.clientX - canvas._l[0], dy = e.clientY - canvas._l[1];
+  if (e.shiftKey || (e.buttons & 2)) slide(dy); else { az -= dx * 0.008; el = Math.max(-0.6, Math.min(1.45, el + dy * 0.006)); }
+  canvas._l = [e.clientX, e.clientY];
 });
-const endDrag = e => { pts.delete(e.pointerId); pinch = 0; if (!pts.size) canvas._l = null; else canvas._l = [...pts.values()][0]; }; canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
-canvas.addEventListener('wheel', e => { e.preventDefault(); goal.d = Math.max(3, Math.min(60, goal.d * (1 + Math.sign(e.deltaY) * 0.08))); }, { passive: false });
+const endDrag = e => { pts.delete(e.pointerId); pinch = 0; midY = null; canvas._l = pts.size ? [...pts.values()][0] : null; }; canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+// vertical slider: slide the view to the bottom (pit) or the top (machine room) of the shaft
+const vs = $('#vSlide'); vs.min = -1; vs.max = (YS + 1).toFixed(2); vs.step = 0.05; vs.value = OY;
+vs.oninput = () => { freeCam(); panY = +vs.value; sliding = true; }; vs.onchange = () => { sliding = false; }; vs.onpointerup = () => { sliding = false; };
+// zoom: mouse wheel, touchpad two-finger scroll and touchpad pinch (a wheel event with ctrlKey), Safari gesture events. Listen on the whole stage so overlays do not swallow it.
+const zoomBy = f => { goal.d = Math.max(3, Math.min(60, goal.d * f)); zoomMul = Math.max(0.3, Math.min(6, zoomMul * f)); };
+const stageEl = document.querySelector('.stage');
+stageEl.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('input,select,.say')) return; e.preventDefault(); const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1); zoomBy(Math.exp(dy * (e.ctrlKey ? 0.012 : 0.0016))); }, { passive: false });
+let gDist = 1; stageEl.addEventListener('gesturestart', e => { e.preventDefault(); gDist = 1; }); stageEl.addEventListener('gesturechange', e => { e.preventDefault(); zoomBy(gDist / e.scale); gDist = e.scale; }); stageEl.addEventListener('gestureend', e => e.preventDefault());
 const camPresets = { overview: { d: OV, az: 0.5, el: 0.2 }, follow: { d: 9, az: 0.5, el: 0.2 }, doors: { d: 5.2, az: 0.35, el: 0.1 }, machine: { d: 7, az: 0.75, el: 0.2 } };
 function setCam(m) {
   camMode = m; focus = null; document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', b.dataset.cam === m));
-  const c = camPresets[m]; goal.d = c.d; camAnim = { az: c.az, el: c.el };
+  const c = camPresets[m]; goal.d = c.d; zoomMul = 1; camAnim = { az: c.az, el: c.el }; if (m === 'overview') panY = OY;
 }
 document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => setCam(b.dataset.cam));
 let rw = 0, rh = 0;
@@ -888,15 +905,16 @@ function update3D(t) {
   sensors.forEach((s, i) => s.material.emissive.setHex(X.FS[i] ? 0x33ff99 : 0x000000));
 }
 function updateCam(dt) {
-  let gx = 0, gy = OY, gz = 0;
+  let gx = 0, gy = panY, gz = 0;
   if (camMode === 'follow') gy = X.pos + 1.3; else if (camMode === 'doors') { gy = X.pos + 1.1; gz = 1; } else if (camMode === 'machine') { gx = 0.5; gy = YS - 0.2; gz = -0.5; }
   else if (camMode === 'part' && focus) { const v = focus.t(); gx = v.x; gy = v.y; gz = v.z; }
   const f = 1 - Math.pow(0.001, dt);
   tgt.x += (gx - tgt.x) * f; tgt.y += (gy - tgt.y) * f; tgt.z += (gz - tgt.z) * f;
+  if (!sliding) vs.value = Math.max(-1, Math.min(YS + 1, tgt.y));   // the slider follows the camera height
   if ((explainOn || tourT) && camMode === 'part' && focus && !canvas._l) {   // slow orbit and dolly while a part is explained
     const tt = (performance.now() - partT0) / 1000;
-    if (camAnim) { camAnim.az += [0.12, -0.12, 0.06][partK] * dt; camAnim.el = Math.min(0.5, camAnim.el + (partK === 1 ? 0.03 : 0) * dt); }
-    goal.d = focus.d * (1 - [0.22, 0.12, 0.3][partK] * Math.min(1, tt / 4));
+    if (camAnim) { const ph = tt * 0.6; camAnim.az = focus.az + [0.55, -0.55, 0.35][partK] * Math.sin(ph); camAnim.el = Math.max(0.05, Math.min(0.5, focus.el + 0.07 * Math.sin(ph * 0.8 + partK))); }   // sweep back and forth around the best viewing angle so the part stays in view
+    goal.d = focus.d * (1 - [0.22, 0.12, 0.3][partK] * Math.min(1, tt / 4)) * zoomMul;
   }
   if (camAnim) { az += (camAnim.az - az) * f; el += (camAnim.el - el) * f; }
   dist += (goal.d * (camMode === 'overview' ? Math.max(1, 1.15 / camera.aspect) : 1) - dist) * f;
@@ -1049,7 +1067,7 @@ parts.forEach((p, i) => {
 function selectPart(id, auto) {
   const p = parts.find(q => q.id === id); if (!p) return;
   if (!auto) { const idx = parts.indexOf(p); if (explainOn) { runExplain(idx); return; } stopTour(); }   // clicking during a demo resumes it from that part
-  sel = p; partT0 = performance.now(); partK = parts.indexOf(p) % 3; if (panelName !== 'parts') openPanel('parts');
+  sel = p; zoomMul = 1; partT0 = performance.now(); partK = parts.indexOf(p) % 3; if (panelName !== 'parts') openPanel('parts');
   camMode = 'part'; focus = p.cam; goal.d = p.cam.d; camAnim = { az: p.cam.az, el: p.cam.el };
   document.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', 'false'));
   parts.forEach(q => { q.hot.classList.toggle('sel', q === p); q.btn.classList.toggle('on', q === p); });
@@ -1060,14 +1078,31 @@ let exId = 0, explainOn = false;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let voices = [];
 const vScore = v => (/natural|premium|enhanced|online/i.test(v.name) ? 6 : 0) + (/google/i.test(v.name) ? 4 : 0) + (/samantha|daniel|karen|moira|serena|aaron|jenny|aria|guy/i.test(v.name) ? 3 : 0) + (/en-(US|GB)/i.test(v.lang) ? 2 : 0) + (v.localService ? 0 : 1);
+let voiceChosen = false, voiceFails = 0;
+const voiceNote = t => { const n = $('#vNote'); if (n) n.textContent = t; };
+// Google voices only, with Google UK English Female first and selected by default. If the browser has no Google voice the best English voice is used and a note says so, so Voice never goes dead.
+const isUKF = v => /google uk english female/i.test(v.name);
+const FEMALE_GB = ['serena', 'kate', 'stephanie', 'martha', 'hazel', 'susan', 'libby', 'sonia', 'shelley', 'flo', 'sandy', 'female'];   // female British voices in order of preference
+// Use a fresh voice object at speak time (stale ones are silently ignored). The added Google UK English Female entry resolves to the real voice if it appeared, else to a female British voice, else to the en-GB default.
+function resolveVoice(v) {
+  const list = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  if (v && !v.pseudo) return list.find(x => x.name === v.name && x.lang === v.lang) || v;
+  return list.find(isUKF) || FEMALE_GB.map(n => list.find(x => /^en[-_]GB/i.test(x.lang) && x.name.toLowerCase().includes(n))).find(Boolean) || null;
+}
 function loadVoices() {
   if (!window.speechSynthesis) return;
-  voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)).sort((x, y) => vScore(y) - vScore(x));
-  const sel = $('#expVoiceName'), cur = sel.value; sel.innerHTML = '';
-  voices.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = v.name + ' (' + v.lang + ')'; sel.appendChild(o); });
-  if (cur && voices[+cur]) sel.value = cur;
+  const en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)), g = en.filter(v => /google/i.test(v.name));
+  voices = (g.length ? g : en).sort((x, y) => (isUKF(y) - isUKF(x)) || vScore(y) - vScore(x));
+  const listedUKF = voices.some(isUKF);
+  if (!listedUKF) voices.unshift({ name: 'Google UK English Female', lang: 'en-GB', pseudo: true });   // not exposed by this browser: ask for the British English voice by language
+  const sel = $('#expVoiceName'), cur = voiceChosen && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : '';
+  sel.innerHTML = ''; voices.forEach((v, i) => { const o = document.createElement('option'); o.value = i; o.textContent = v.name + ' (' + v.lang + ')'; sel.appendChild(o); });
+  let idx = 0; if (cur) { const k = voices.findIndex(v => cur.startsWith(v.name)); if (k >= 0) idx = k; }
+  if (voices.length) sel.value = idx;
+  if (listedUKF) voiceNote(''); else { const alt = resolveVoice({ pseudo: true }); voiceNote('This browser does not list Google UK English Female, so ' + (alt ? alt.name + ' (a female British voice) is used.' : 'it asks for the British English (en-GB) voice.')); }
 }
-if (window.speechSynthesis) { speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); }
+if (window.speechSynthesis) { speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); let tries = 0; const poll = setInterval(() => { loadVoices(); if (voices.some(isUKF) && !voices[0].pseudo || ++tries > 30) clearInterval(poll); }, 500); }   // some browsers load voices late
+$('#expVoiceName').onchange = () => { voiceChosen = true; };
 // expand abbreviations and symbols so the voice reads plain words
 const spoken = t => t.replace(/N·m/g, 'newton metres').replace(/K_SAFE/g, 'K safe').replace(/K_RUN/g, 'K run').replace(/K_UP/g, 'K up').replace(/K_DN/g, 'K down').replace(/K_BRK/g, 'K brake')
   .replace(/K_DOP/g, 'K door open').replace(/K_DCL/g, 'K door close').replace(/K_REQ/g, 'K door request').replace(/K_CLS/g, 'K close request').replace(/LS1/g, 'limit switch 1').replace(/LS2/g, 'limit switch 2')
@@ -1079,11 +1114,19 @@ function speakOne(text, rate, pitch, alive) {
   return new Promise(res => {
     const ss = window.speechSynthesis; if (!ss || !alive()) return res();
     const u = new SpeechSynthesisUtterance(spoken(text)); u.rate = rate; u.pitch = pitch || 1; u.volume = 1;
-    const v = voices[+$('#expVoiceName').value]; if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
-    let done = false; const fin = () => { if (!done) { done = true; res(); } };
-    u.onend = fin; u.onerror = fin; setTimeout(fin, text.length * 110 / rate + 3000); ss.speak(u);
+    const v = voices[+$('#expVoiceName').value];
+    const rv = resolveVoice(v); try { if (rv) { u.voice = rv; u.lang = rv.lang; } else u.lang = (v && v.lang) || 'en-GB'; } catch (e) { u.lang = 'en-GB'; }
+    window.__voiceUsed = rv ? rv.name : 'default ' + u.lang;   // a stale voice object must not break narration
+    let done = false, started = false; const fin = () => { if (!done) { done = true; res(); } };
+    u.onstart = () => { started = true; voiceFails = 0; };
+    u.onend = fin; u.onerror = e => { if (e && e.error && e.error !== 'canceled' && e.error !== 'interrupted') voiceNote('Voice error: ' + e.error); fin(); };
+    setTimeout(() => { if (!started && !done) { if (++voiceFails >= 2) voiceOff('The voice did not start, so Voice was switched off. Pick another voice and switch it on again.'); fin(); } }, 4000);
+    setTimeout(fin, text.length * 110 / rate + 4000);
+    try { ss.resume(); } catch (e) { }   // Chrome can be left paused after a cancel
+    ss.speak(u);
   });
 }
+function voiceOff(msg) { voiceOn = false; const b = $('#vOn'); b.setAttribute('aria-pressed', 'false'); b.textContent = 'Voice off'; stopSpeech(); simPaused = false; if (msg) voiceNote(msg); }
 const stopSpeech = () => { if (window.speechSynthesis) speechSynthesis.cancel(); };
 // speak one sentence at a time with varied pitch and rate; onSent shows the sentence as a subtitle
 async function speakText(text, alive, onSent) {
@@ -1095,14 +1138,15 @@ async function speakText(text, alive, onSent) {
     if (onSent) onSent(sent); await speakOne(sent, voiceRate * r, pitch, alive); await sleep(/\?$/.test(sent) ? 550 : /!$/.test(sent) ? 300 : 400);
   }
 }
+const speakTitle = async (t, alive) => { await speakOne(t, voiceRate * 0.9, 1.12, alive); await sleep(950); };   // slower, then a clear pause so the title is heard as a heading
 const setExBtn = on => { $('#bExplain').textContent = on ? '■ Stop' : '▶ Play all parts'; $('#bExplain').classList.toggle('running', on); };
 async function runExplain(start = 0) {
-  stopTour(); const id = ++exId, alive = () => id === exId; explainOn = true; setExBtn(true); press(N - 1);
+  stopTour(); const id = ++exId, alive = () => id === exId; explainOn = true; setExBtn(true); await sleep(150);   // let a cancelled utterance clear before speaking press(N - 1);
   for (let i = start; i < parts.length; i++) {
     if (!alive()) return;
     const p = parts[i], t0 = performance.now(), head = `<b>${i + 1}/${parts.length} · ${p.name}</b> `;
     selectPart(p.id, true);
-    if (voiceOn) { await speakText(txt(p).talk, alive, s => say(head + s)); await sleep(Math.max(0, pace * 1000 - (performance.now() - t0))); }
+    if (voiceOn) { say(head + txt(p).role); await speakTitle(p.name, alive); await speakText(txt(p).talk, alive, s => say(head + s)); await sleep(Math.max(0, pace * 1000 - (performance.now() - t0))); }   // the part name is spoken first
     else { const t = txt(p); say(head + `${t.role} ${t.how.split('. ')[0].replace(/\.$/, '')}.`); await sleep(pace * 1000); }
   }
   if (alive()) { stopTour(); say('<b>Explain finished.</b> Click any numbered marker or part name to look at it again.'); }
@@ -1216,6 +1260,7 @@ pick('data-lv', v => { level = v; renderCard(sel); }); pick('data-pc', v => { pa
 const vOn = $('#vOn'), vMenu = $('#vMenu'), vCfg = $('#vCfg');
 if (!window.speechSynthesis) { vOn.disabled = true; vCfg.disabled = true; vOn.title = 'This browser has no speech voices'; }
 vOn.onclick = () => { voiceOn = !voiceOn; vOn.setAttribute('aria-pressed', voiceOn); vOn.textContent = voiceOn ? 'Voice on' : 'Voice off'; if (!voiceOn) { stopSpeech(); simPaused = false; } };
+$('#vTest').onclick = async () => { voiceNote('Speaking...'); stopSpeech(); await sleep(150); await speakText('Hello. This is the guide speaking. Can you hear me clearly?', () => true); if ($('#vNote').textContent === 'Speaking...') voiceNote('Spoken with: ' + window.__voiceUsed + '. If you heard that, the voice is working.'); };
 vCfg.onclick = e => { e.stopPropagation(); vMenu.hidden = !vMenu.hidden; vCfg.setAttribute('aria-expanded', !vMenu.hidden); };
 document.addEventListener('click', e => { if (!vMenu.hidden && !vMenu.contains(e.target)) { vMenu.hidden = true; vCfg.setAttribute('aria-expanded', 'false'); } });
 // advanced sections stay folded until asked for
@@ -1224,7 +1269,7 @@ document.querySelectorAll('[data-adv]').forEach(b => b.onclick = () => { const r
 function setMode(m) {
   document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', b.dataset.mode === m));
   document.querySelectorAll('[data-ctx]').forEach(b => { b.hidden = b.dataset.ctx !== m; });
-  if (m === 'explain') { if (panelName !== 'parts') openPanel('parts'); } else if (panelName === 'parts') openPanel('parts');
+  if (m === 'explain') { if (panelName !== 'parts') openPanel('parts'); } else if (panelName === 'parts') { openPanel('parts'); setCam('follow'); }   // leaving Explain returns the camera to its default
 }
 document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 // phone: tools fold into a menu; the stage sticks under the top bar while a panel is open
@@ -1259,7 +1304,10 @@ async function runDemo(kind) {
   const wait = s => { const t0 = X.t; return until(() => X.t - t0 >= s); };
   const flag = (k, v) => { X[k] = v; syncToggles(); log(flagMsg[k][v ? 0 : 1], v ? 'r' : 'g'); };
   // caption, then (when voice is on) pause the simulation until the narration finishes
-  const narr = async h => { say(h); if (!voiceOn) return; simPaused = true; try { await speakText(h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), () => id === demoRun); } finally { simPaused = false; } };
+  const narr = async h => { say(h); if (!voiceOn) return; simPaused = true; try {
+    const alive = () => id === demoRun, plain = t => t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), m = h.match(/^<b>(.*?)<\/b>\s*([\s\S]*)$/);
+    if (m) { await speakTitle(plain(m[1]).replace(/^(\d+)\s*·\s*/, 'Step $1, ').replace(/\.$/, ''), alive); await speakText(plain(m[2]), alive); } else await speakText(plain(h), alive);
+  } finally { simPaused = false; } };
   try {
     initState(); prev = {}; syncToggles(); setSpeed(2);
     if (kind === 'door') {
@@ -1361,7 +1409,7 @@ try { const t = localStorage.getItem('lift-theme'); if (t === 'light' || t === '
 document.querySelectorAll('[data-th]').forEach(b => b.onclick = () => { root.dataset.theme = b.dataset.th; try { localStorage.setItem('lift-theme', b.dataset.th); } catch (e) { } applyTheme(); });
 if (dayMq.addEventListener) dayMq.addEventListener('change', applyTheme);
 applyTheme();
-window.__lift = { setMode, step: n => { for (let i = 0; i < n; i++) scan(1 / 120); }, X: () => X, press, pressOpen, pressClose, runDemo, openPanel, openSub };
+window.__lift = { cam: () => ({ goal: +goal.d.toFixed(2), dist: +dist.toFixed(2), zoomMul: +zoomMul.toFixed(2) }), setMode, step: n => { for (let i = 0; i < n; i++) scan(1 / 120); }, X: () => X, press, pressOpen, pressClose, runDemo, openPanel, openSub };
 requestAnimationFrame(frame);
 })();
 </script>
